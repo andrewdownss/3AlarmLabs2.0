@@ -1,0 +1,17 @@
+node_modules
+
+# Env (never commit secrets)
+.env
+.env.*
+!.env.example
+production.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
