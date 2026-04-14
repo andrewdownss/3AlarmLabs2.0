@@ -10,6 +10,9 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/threealarmlabs
       - BETTER_AUTH_BASE_URL=http://localhost
       - ORIGIN=http://localhost
+      - VITE_API_PROXY_TARGET=http://api:4000
+    ports:
+      - "3000:3000"
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/static:/app/static
@@ -32,6 +35,8 @@ services:
       - API_PORT=4000
       - REDIS_URL=redis://redis:6379
       - TRAINER_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/threealarmlabs
+    ports:
+      - "4000:4000"
     volumes:
       - ./api/src:/app/src
     depends_on:
@@ -67,17 +72,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:1.27-alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - frontend
-      - api
     restart: unless-stopped
 
 volumes:

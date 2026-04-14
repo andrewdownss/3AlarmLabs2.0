@@ -23,6 +23,17 @@ const perfHandle: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
+const securityHeadersHandle: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event);
+
+	response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
+
+	return response;
+};
+
 const authHandle: Handle = async ({ event, resolve }) => {
 	const session = await auth.api.getSession({
 		headers: event.request.headers
@@ -63,4 +74,4 @@ async function fetchUserRow(userId: string) {
 	});
 }
 
-export const handle = sequence(perfHandle, authHandle);
+export const handle = sequence(perfHandle, securityHeadersHandle, authHandle);

@@ -42,7 +42,12 @@ Create recurring **Products / Prices** in the [Stripe Dashboard](https://dashboa
 
 ## TLS and reverse proxy
 
-Production must use **HTTPS**. Set `BETTER_AUTH_BASE_URL` and cookie `Secure` behavior to match. The repo includes an `nginx` config that proxies `/`, `/socket.io/`, and `/api/trainer/` to the app containers.
+Production must use **HTTPS**. Set `BETTER_AUTH_BASE_URL` and cookie `Secure` behavior to match.
+
+For deployment, expose **only** the `frontend` service publicly (port 3000 inside the Docker network). The frontend’s Node server proxies:
+
+- `/api/trainer/*` → the `api` service
+- `/socket.io/*` → the `api` service (WebSocket upgrades)
 
 ## Database
 

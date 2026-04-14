@@ -9,11 +9,11 @@ export default defineConfig({
 		// host (e.g. reverse proxy `/socket.io` and `/api/trainer` → API) so the client avoids extra DNS/TLS hops.
 		proxy: {
 			'/socket.io': {
-				target: 'http://localhost:4000',
+				target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000',
 				ws: true
 			},
 			'/api/trainer': {
-				target: 'http://localhost:4000'
+				target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000'
 			}
 		}
 	}

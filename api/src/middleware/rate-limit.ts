@@ -1,4 +1,4 @@
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, type Options } from 'express-rate-limit';
 import { RedisStore, type RedisReply } from 'rate-limit-redis';
 import { redis } from '../config/redis.js';
 import type { AuthenticatedRequest } from './auth.js';
@@ -15,12 +15,16 @@ export const globalLimiter = rateLimit({
 	store: new RedisStore({ sendCommand, prefix: 'rl:global:' })
 });
 
+const radioKeyGenerator: Options['keyGenerator'] = (req) =>
+	(req as AuthenticatedRequest).userId ?? req.ip ?? 'unknown';
+
 /** 10 req/min per authenticated user for the radio (OpenAI) endpoint */
 export const radioLimiter = rateLimit({
 	windowMs: 60_000,
 	max: 10,
 	standardHeaders: true,
 	legacyHeaders: false,
-	keyGenerator: (req) => (req as AuthenticatedRequest).userId ?? req.ip ?? 'unknown',
-	store: new RedisStore({ sendCommand, prefix: 'rl:radio:' })
+	keyGenerator: radioKeyGenerator,
+	store: new RedisStore({ sendCommand, prefix: 'rl:radio:' }),
+	validate: { ipValueType: false }
 });
