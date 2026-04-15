@@ -1,3 +1,28 @@
+import cookie from 'cookie';
+
+const SECURE_SESSION_COOKIE = '__Secure-better-auth.session_token';
+const PLAIN_SESSION_COOKIE = 'better-auth.session_token';
+
+export interface ParsedBetterAuthSessionCookie {
+	cookieName: typeof SECURE_SESSION_COOKIE | typeof PLAIN_SESSION_COOKIE;
+	raw: string;
+}
+
+/**
+ * Reads the signed session cookie from a Cookie header.
+ * Prefer `__Secure-` when both are present — Better Auth sets that on HTTPS; an older plain cookie can remain and would win with wrong precedence.
+ */
+export function parseBetterAuthSessionCookieHeader(
+	header: string | undefined
+): ParsedBetterAuthSessionCookie | null {
+	const cookies = cookie.parse(header || '');
+	const secure = cookies[SECURE_SESSION_COOKIE];
+	if (secure) return { cookieName: SECURE_SESSION_COOKIE, raw: secure };
+	const plain = cookies[PLAIN_SESSION_COOKIE];
+	if (plain) return { cookieName: PLAIN_SESSION_COOKIE, raw: plain };
+	return null;
+}
+
 /**
  * Better Auth sets `session_token` via better-call `signCookieValue`: `${dbToken}.${hmacBase64}`,
  * then URI-encodes for Set-Cookie. The raw session row `token` must be recovered before DB lookup.

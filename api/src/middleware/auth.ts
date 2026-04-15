@@ -2,8 +2,10 @@ import type { Request, Response, NextFunction } from 'express';
 import { eq, and, gt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { session } from '../db/schema/trainer.js';
-import { sessionTokenFromBetterAuthCookieValue } from '../lib/better-auth-session-token.js';
-import cookie from 'cookie';
+import {
+	parseBetterAuthSessionCookieHeader,
+	sessionTokenFromBetterAuthCookieValue
+} from '../lib/better-auth-session-token.js';
 
 export interface AuthenticatedRequest extends Request {
 	userId?: string;
@@ -11,15 +13,13 @@ export interface AuthenticatedRequest extends Request {
 
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
 	try {
-		const cookies = cookie.parse(req.headers.cookie || '');
-		const token = cookies['better-auth.session_token'] || cookies['__Secure-better-auth.session_token'];
-
-		if (!token) {
+		const parsed = parseBetterAuthSessionCookieHeader(req.headers.cookie);
+		if (!parsed) {
 			res.status(401).json({ error: 'Not authenticated' });
 			return;
 		}
 
-		const sessionToken = sessionTokenFromBetterAuthCookieValue(token);
+		const sessionToken = sessionTokenFromBetterAuthCookieValue(parsed.raw);
 
 		const found = await db.select().from(session)
 			.where(and(eq(session.token, sessionToken), gt(session.expiresAt, new Date())))

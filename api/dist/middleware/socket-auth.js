@@ -1,23 +1,18 @@
 import { eq, and, gt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { session } from '../db/schema/trainer.js';
-import { sessionTokenFromBetterAuthCookieValue } from '../lib/better-auth-session-token.js';
+import { parseBetterAuthSessionCookieHeader, sessionTokenFromBetterAuthCookieValue } from '../lib/better-auth-session-token.js';
 import cookie from 'cookie';
 export async function socketAuth(socket, next) {
     try {
-        const rawCookie = socket.handshake.headers.cookie || '';
-        const cookies = cookie.parse(rawCookie);
-        const cookieName = cookies['__Secure-better-auth.session_token']
-            ? '__Secure-better-auth.session_token'
-            : cookies['better-auth.session_token']
-                ? 'better-auth.session_token'
-                : null;
-        if (!cookieName) {
-            const names = Object.keys(cookies).join(', ');
+        const header = socket.handshake.headers.cookie || '';
+        const parsed = parseBetterAuthSessionCookieHeader(header);
+        if (!parsed) {
+            const names = Object.keys(cookie.parse(header)).join(', ');
             console.warn(`[socket-auth] No session cookie. Available cookies: [${names}]`);
             return next(new Error('Not authenticated'));
         }
-        const token = cookies[cookieName];
+        const { cookieName, raw: token } = parsed;
         const sessionToken = sessionTokenFromBetterAuthCookieValue(token);
         const now = new Date();
         const found = await db.select().from(session)
