@@ -1,12 +1,13 @@
 import http from 'node:http';
 import process from 'node:process';
-import { createProxyServer } from 'http-proxy';
+import httpProxy from 'http-proxy';
 import { handler } from './build/handler.js';
 
 const port = parseInt(process.env.PORT ?? '3000', 10);
 const apiInternalUrl = process.env.API_INTERNAL_URL ?? 'http://api:4000';
 
-const apiProxy = createProxyServer({
+/** `http-proxy` is CJS; use default import under Node ESM (no named exports). */
+const apiProxy = httpProxy.createProxyServer({
 	target: apiInternalUrl,
 	changeOrigin: true,
 	ws: true
@@ -41,4 +42,3 @@ server.on('upgrade', (req, socket, head) => {
 server.listen(port, () => {
 	console.log(`[frontend] Listening on port ${port} (api proxy -> ${apiInternalUrl})`);
 });
-
