@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { authClient } from '$lib/auth-client';
 	import { Button } from '$lib/components/ui/button';
@@ -12,8 +12,13 @@
 	const inviteNext = $derived(token ? `/invite/${token}` : '/invite');
 
 	async function signOutAndContinue() {
-		await authClient.signOut();
-		await goto(`/login?next=${encodeURIComponent(inviteNext)}`);
+		try {
+			await authClient.signOut();
+		} catch (err) {
+			console.error('[logout] signOut failed', err);
+		}
+		const loginPath = resolve('/login');
+		window.location.assign(`${loginPath}?next=${encodeURIComponent(inviteNext)}`);
 	}
 </script>
 

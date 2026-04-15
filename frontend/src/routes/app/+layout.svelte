@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { authClient } from '$lib/auth-client';
@@ -24,9 +23,12 @@
 	async function handleLogout() {
 		try {
 			await authClient.signOut();
-		} finally {
-			await goto(resolve('/login'));
+		} catch (err) {
+			console.error('[logout] signOut failed', err);
 		}
+		// Full navigation so `/login` load runs with the updated session cookie. Client-side `goto`
+		// alone can race ahead of Set-Cookie and bounce back into the app while still "logged in".
+		window.location.assign(resolve('/login'));
 	}
 
 	$effect(() => {
