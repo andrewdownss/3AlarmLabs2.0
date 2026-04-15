@@ -129,5 +129,5 @@ export const session = pgTable('session', {
 	id: text('id').primaryKey(),
 	token: text('token').notNull(),
 	userId: text('user_id').notNull(),
-	expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull()
+	expiresAt: timestamp('expires_at').notNull()
 });
