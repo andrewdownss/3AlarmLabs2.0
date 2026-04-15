@@ -25,3 +25,12 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=deps /app/node_modules ./node_modules
 EXPOSE 3000
 CMD ["node", "server.js"]
+
+# One-shot: apply schema to Postgres (docker-compose `db-migrate` service).
+# Non-interactive: drizzle.config strict defaults off; --force approves data-loss DDL.
+FROM node:20-alpine AS migrate
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+CMD ["sh", "-c", "exec npx drizzle-kit push --force"]
