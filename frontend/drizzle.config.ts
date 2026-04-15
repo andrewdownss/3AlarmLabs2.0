@@ -7,5 +7,6 @@ export default defineConfig({
 	dialect: 'postgresql',
 	dbCredentials: { url: process.env.DATABASE_URL },
 	verbose: true,
-	strict: true
+	// Interactive confirmation (blocks CI/Docker). Enable locally: DRIZZLE_STRICT=true npm run db:push
+	strict: process.env.DRIZZLE_STRICT === 'true'
 });

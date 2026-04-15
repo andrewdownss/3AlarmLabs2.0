@@ -12,7 +12,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
-		"db:push": "node --env-file=../.env node_modules/.bin/drizzle-kit push",
+		"db:push": "DRIZZLE_STRICT=true node --env-file=../.env node_modules/.bin/drizzle-kit push",
 		"db:generate": "node --env-file=../.env node_modules/.bin/drizzle-kit generate",
 		"db:migrate": "node --env-file=../.env node_modules/.bin/drizzle-kit migrate",
 		"db:studio": "node --env-file=../.env node_modules/.bin/drizzle-kit studio"
