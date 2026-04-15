@@ -3,6 +3,16 @@ import process from 'node:process';
 import httpProxy from 'http-proxy';
 import { handler } from './build/handler.js';
 
+process.on('uncaughtException', (err) => {
+	console.error('[frontend] uncaughtException', err);
+	process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+	console.error('[frontend] unhandledRejection', reason);
+	process.exit(1);
+});
+
+const host = process.env.HOST ?? '0.0.0.0';
 const port = parseInt(process.env.PORT ?? '3000', 10);
 const apiInternalUrl = process.env.API_INTERNAL_URL ?? 'http://api:4000';
 
@@ -39,6 +49,11 @@ server.on('upgrade', (req, socket, head) => {
 	socket.destroy();
 });
 
-server.listen(port, () => {
-	console.log(`[frontend] Listening on port ${port} (api proxy -> ${apiInternalUrl})`);
-});
+server
+	.listen(port, host, () => {
+		console.log(`[frontend] Listening on http://${host}:${port} (api proxy -> ${apiInternalUrl})`);
+	})
+	.on('error', (err) => {
+		console.error('[frontend] listen error', err);
+		process.exit(1);
+	});

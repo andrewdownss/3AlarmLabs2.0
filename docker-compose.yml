@@ -28,6 +28,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      HOST: 0.0.0.0
       PORT: 3000
       API_INTERNAL_URL: http://api:4000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/threealarmlabs
