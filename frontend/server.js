@@ -29,9 +29,20 @@ apiProxy.on('error', (err, _req, res) => {
 	res.end(JSON.stringify({ error: 'bad_gateway', message: err.message }));
 });
 
+function isSocketIoRequest(url) {
+	const pathname = url.split('?')[0] ?? '/';
+	return pathname === '/socket.io' || pathname.startsWith('/socket.io/');
+}
+
 const server = http.createServer((req, res) => {
 	const url = req.url ?? '/';
 	if (url.startsWith('/api/trainer/')) {
+		apiProxy.web(req, res);
+		return;
+	}
+
+	// Socket.IO uses HTTP long-polling before upgrade; only proxying `upgrade` yields 404 on GET /socket.io/
+	if (isSocketIoRequest(url)) {
 		apiProxy.web(req, res);
 		return;
 	}
@@ -41,7 +52,7 @@ const server = http.createServer((req, res) => {
 
 server.on('upgrade', (req, socket, head) => {
 	const url = req.url ?? '/';
-	if (url.startsWith('/socket.io/')) {
+	if (isSocketIoRequest(url)) {
 		apiProxy.ws(req, socket, head);
 		return;
 	}
