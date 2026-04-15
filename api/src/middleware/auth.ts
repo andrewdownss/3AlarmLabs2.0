@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { eq, and, gt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { session } from '../db/schema/trainer.js';
+import { sessionTokenFromBetterAuthCookieValue } from '../lib/better-auth-session-token.js';
 import cookie from 'cookie';
 
 export interface AuthenticatedRequest extends Request {
@@ -18,7 +19,7 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 			return;
 		}
 
-		const sessionToken = token.split('.')[0];
+		const sessionToken = sessionTokenFromBetterAuthCookieValue(token);
 
 		const found = await db.select().from(session)
 			.where(and(eq(session.token, sessionToken), gt(session.expiresAt, new Date())))

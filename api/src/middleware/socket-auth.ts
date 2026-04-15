@@ -2,6 +2,7 @@ import type { Socket } from 'socket.io';
 import { eq, and, gt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { session } from '../db/schema/trainer.js';
+import { sessionTokenFromBetterAuthCookieValue } from '../lib/better-auth-session-token.js';
 import cookie from 'cookie';
 
 export async function socketAuth(socket: Socket, next: (err?: Error) => void) {
@@ -10,7 +11,7 @@ export async function socketAuth(socket: Socket, next: (err?: Error) => void) {
 		const token = cookies['better-auth.session_token'] || cookies['__Secure-better-auth.session_token'];
 		if (!token) return next(new Error('Not authenticated'));
 
-		const sessionToken = token.split('.')[0];
+		const sessionToken = sessionTokenFromBetterAuthCookieValue(token);
 		const found = await db.select().from(session)
 			.where(and(eq(session.token, sessionToken), gt(session.expiresAt, new Date())))
 			.limit(1);

@@ -1,6 +1,7 @@
 import { eq, and, gt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { session } from '../db/schema/trainer.js';
+import { sessionTokenFromBetterAuthCookieValue } from '../lib/better-auth-session-token.js';
 import cookie from 'cookie';
 export async function requireAuth(req, res, next) {
     try {
@@ -10,7 +11,7 @@ export async function requireAuth(req, res, next) {
             res.status(401).json({ error: 'Not authenticated' });
             return;
         }
-        const sessionToken = token.split('.')[0];
+        const sessionToken = sessionTokenFromBetterAuthCookieValue(token);
         const found = await db.select().from(session)
             .where(and(eq(session.token, sessionToken), gt(session.expiresAt, new Date())))
             .limit(1);
