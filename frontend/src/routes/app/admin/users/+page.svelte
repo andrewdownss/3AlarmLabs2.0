@@ -11,7 +11,7 @@
 	let query = $state('');
 	const form = $derived(page.form as { error?: string; success?: boolean } | null | undefined);
 
-	const filteredUsers = $derived(() => {
+	const filteredUsers = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return data.users;
 		return data.users.filter((u) => {

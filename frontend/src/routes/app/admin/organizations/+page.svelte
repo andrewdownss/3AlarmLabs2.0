@@ -11,7 +11,7 @@
 	let query = $state('');
 	const form = $derived(page.form as { error?: string; success?: boolean } | null | undefined);
 
-	const filteredOrgs = $derived(() => {
+	const filteredOrgs = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return data.organizations;
 		return data.organizations.filter((o) => {
