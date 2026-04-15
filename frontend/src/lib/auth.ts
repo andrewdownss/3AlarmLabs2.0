@@ -36,6 +36,8 @@ export const auth = betterAuth({
 		}
 	},
 	sessions: { strategy: 'database' },
-	baseURL: env.BETTER_AUTH_BASE_URL ?? 'http://localhost',
+	// Must match the browser origin (include port in dev, e.g. http://localhost:5173). If unset,
+	// Better Auth derives the origin from each request — avoids404 on /api/auth/* when env says http://localhost.
+	baseURL: env.BETTER_AUTH_BASE_URL?.trim() || undefined,
 	plugins: [sveltekitCookies(getRequestEvent)]
 });

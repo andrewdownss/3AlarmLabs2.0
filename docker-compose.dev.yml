@@ -8,8 +8,8 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/threealarmlabs
-      - BETTER_AUTH_BASE_URL=http://localhost
-      - ORIGIN=http://localhost
+      - BETTER_AUTH_BASE_URL=http://localhost:3000
+      - ORIGIN=http://localhost:3000
       - VITE_API_PROXY_TARGET=http://api:4000
     ports:
       - "3000:3000"
