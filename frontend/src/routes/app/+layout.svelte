@@ -76,6 +76,15 @@
 				>
 					Command
 				</Button>
+				{#if data.user?.isAdmin}
+					<Button
+						variant={isActive('/app/admin') ? 'default' : 'outline'}
+						size="sm"
+						href={resolve('/app/admin')}
+					>
+						Admin
+					</Button>
+				{/if}
 				{#if data.isOrgOwner}
 					<Button
 						variant={isActive('/app/settings/billing') ? 'default' : 'outline'}
@@ -152,6 +161,19 @@
 				>
 					Command
 				</a>
+				{#if data.user?.isAdmin}
+					<a
+						href={resolve('/app/admin')}
+						class="flex min-h-[48px] items-center rounded-md px-3 py-3 text-base font-medium transition-colors {isActive(
+							'/app/admin'
+						)
+							? 'bg-primary text-primary-foreground'
+							: 'hover:bg-accent'}"
+						onclick={closeMobileMenu}
+					>
+						Admin
+					</a>
+				{/if}
 				{#if data.isOrgOwner}
 					<a
 						href={resolve('/app/settings/billing')}
