@@ -10,7 +10,7 @@ import {
 	trainerSessionEvents
 } from '$lib/server/db/schema';
 import { generateJoinCode } from '$lib/server/join-code';
-import { canStartCommandMode, getPlanConfig, normalizePlanId } from '$lib/plans';
+import { canCreateCommandScenario, canStartCommandMode, getPlanConfig, normalizePlanId } from '$lib/plans';
 
 export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -44,7 +44,8 @@ export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 		}
 	});
 
-	return { scenarios, planConfig };
+	const scenarioCount = scenarios.length;
+	return { scenarios, scenarioCount, canCreateScenario: canCreateCommandScenario(planConfig, scenarioCount), planConfig };
 };
 
 export const actions: Actions = {

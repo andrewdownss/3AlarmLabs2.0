@@ -17,9 +17,17 @@ function readEnvStripePrice(planId: PlanId, interval: BillingInterval): string |
 	return raw?.trim() || undefined;
 }
 
+function readLegacyEnvStripePrice(legacyPlanId: 'TEAM' | 'INSTRUCTOR' | 'ENTERPRISE', interval: BillingInterval) {
+	const suffix = interval === 'month' ? 'MONTHLY' : 'ANNUAL';
+	const key = `STRIPE_PRICE_${legacyPlanId}_${suffix}`;
+	const raw = (env as Record<string, string | undefined>)[key];
+	return raw?.trim() || undefined;
+}
+
 export function getStripePriceIdForPlan(planId: PlanId, interval: BillingInterval): string | null {
 	const plan = PLANS[planId];
 	if (!plan.canSelfServeCheckout) return null;
+	if (!plan.checkoutIntervals.includes(interval)) return null;
 	const id = readEnvStripePrice(planId, interval);
 	return id ?? null;
 }
@@ -79,10 +87,25 @@ export function mapPriceIdToPlan(priceId: string): PlanId | null {
 	for (const plan of Object.values(PLANS)) {
 		if (!plan.canSelfServeCheckout) continue;
 		for (const interval of ['month', 'year'] as const) {
+			if (!plan.checkoutIntervals.includes(interval)) continue;
 			const pid = readEnvStripePrice(plan.id, interval);
 			if (pid === priceId) return plan.id;
 		}
 	}
+
+	// Legacy env keys (pre-firehouse tiers) → new plan IDs
+	const legacy: Array<{ legacy: 'TEAM' | 'INSTRUCTOR' | 'ENTERPRISE'; mapped: PlanId }> = [
+		{ legacy: 'TEAM', mapped: 'small_firehouse' },
+		{ legacy: 'INSTRUCTOR', mapped: 'medium_firehouse' },
+		{ legacy: 'ENTERPRISE', mapped: 'large_firehouse' }
+	];
+	for (const entry of legacy) {
+		for (const interval of ['month', 'year'] as const) {
+			const pid = readLegacyEnvStripePrice(entry.legacy, interval);
+			if (pid === priceId) return entry.mapped;
+		}
+	}
+
 	return null;
 }
 

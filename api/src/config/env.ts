@@ -1,8 +1,13 @@
 import { z } from 'zod';
+import { loadDotenv } from './load-dotenv.js';
+
+loadDotenv();
 
 const envSchema = z.object({
 	API_PORT: z.string().default('4000'),
-	TRAINER_DATABASE_URL: z.string(),
+	/** Prefer this for the trainer API pool; if unset, `DATABASE_URL` is used (same DB in local dev). */
+	TRAINER_DATABASE_URL: z.string().optional(),
+	DATABASE_URL: z.string().optional(),
 	REDIS_URL: z.string().default('redis://localhost:6379'),
 	OPENAI_API_KEY: z.string().optional(),
 	UPLOADTHING_TOKEN: z.string().optional(),
@@ -13,4 +18,12 @@ const envSchema = z.object({
 	DATABASE_POOL_CONNECTION_TIMEOUT_MS: z.string().optional()
 });
 
-export const env = envSchema.parse(process.env);
+const parsed = envSchema.parse(process.env);
+const trainerDatabaseUrl = parsed.TRAINER_DATABASE_URL || parsed.DATABASE_URL;
+if (!trainerDatabaseUrl?.trim()) {
+	throw new Error(
+		'Missing database URL: set TRAINER_DATABASE_URL or DATABASE_URL (see repo .env.example)'
+	);
+}
+
+export const env = { ...parsed, TRAINER_DATABASE_URL: trainerDatabaseUrl };

@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { organizationMembers, scenes } from '$lib/server/db/schema';
 import { fetchStreetViewStatic } from '$lib/server/streetview-static';
-import { UTApi } from 'uploadthing/server';
+import { getUtApi } from '$lib/server/utapi';
 
 function buildSceneAccessWhere(sceneId: string, userId: string, organizationId: string | null) {
 	return organizationId
@@ -67,7 +67,7 @@ export const actions: Actions = {
 			const buffer = await fetchStreetViewStatic(meta.panoId, meta.heading, meta.pitch, meta.fov, '640x640');
 			if (!buffer) return fail(500, { formError: 'Failed to fetch Street View image.' });
 			const file = new File([new Uint8Array(buffer)], `scene-${params.id}.jpg`, { type: 'image/jpeg' });
-			const utapi = new UTApi();
+			const utapi = getUtApi();
 			const uploadResult = await utapi.uploadFiles(file);
 			if (!uploadResult.data?.ufsUrl) return fail(500, { formError: 'Image upload failed.' });
 			await db

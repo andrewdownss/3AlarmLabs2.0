@@ -4,6 +4,7 @@
 	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
 	import { normalizeAnimationOverlays } from '$lib/components/scene-editor/konva-overlay-editor/overlay-utils';
 	import type { PageData } from './$types';
+	import { Spinner } from '$lib/components/ui/spinner';
 	import { env } from '$env/dynamic/public';
 	import { invalidateAll } from '$app/navigation';
 	import { deserialize } from '$app/forms';
@@ -70,6 +71,9 @@
 			<div class="flex gap-2">
 				{#if data.planConfig.canShareLink}
 					<button type="button" onclick={handleShare} disabled={shareLoading} class="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50">
+						{#if shareLoading}
+							<Spinner class="h-4 w-4" />
+						{/if}
 						{shareCopied ? 'Link copied!' : 'Share'}
 					</button>
 				{/if}

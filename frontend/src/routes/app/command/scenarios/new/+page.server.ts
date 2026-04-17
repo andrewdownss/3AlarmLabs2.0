@@ -1,8 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { eq } from 'drizzle-orm';
-import { organizationMembers, trainerScenarios } from '$lib/server/db/schema';
+import { and, count, eq, isNull } from 'drizzle-orm';
+import { organizationMembers, organizations, trainerScenarios } from '$lib/server/db/schema';
+import { canCreateCommandScenario, getPlanConfig, normalizePlanId } from '$lib/plans';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -21,12 +22,34 @@ export const actions: Actions = {
 			where: eq(organizationMembers.userId, locals.user.id),
 			columns: { organizationId: true }
 		});
+		const organizationId = membership?.organizationId ?? null;
+
+		const orgRow = organizationId
+			? await db.query.organizations.findFirst({
+					where: eq(organizations.id, organizationId),
+					columns: { planId: true }
+				})
+			: null;
+		const planConfig = getPlanConfig(normalizePlanId(orgRow?.planId));
+
+		const scenarioCountResult = await db
+			.select({ value: count() })
+			.from(trainerScenarios)
+			.where(
+				organizationId
+					? eq(trainerScenarios.organizationId, organizationId)
+					: and(eq(trainerScenarios.createdBy, locals.user.id), isNull(trainerScenarios.organizationId))
+			);
+		const scenarioCount = scenarioCountResult[0]?.value ?? 0;
+		if (!canCreateCommandScenario(planConfig, scenarioCount)) {
+			return fail(403, { formError: `You've reached the active scenario limit for the ${planConfig.name} plan.` });
+		}
 
 		await db.insert(trainerScenarios).values({
 			id,
 			title,
 			description: String(form.get('description') ?? '').trim() || null,
-			organizationId: membership?.organizationId ?? null,
+			organizationId,
 			createdBy: locals.user.id,
 			constructionType: String(form.get('constructionType') ?? '').trim() || null,
 			address: String(form.get('address') ?? '').trim() || null,

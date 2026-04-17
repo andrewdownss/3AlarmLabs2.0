@@ -2,14 +2,29 @@
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { PLANS, type PlanId } from '$lib/plans';
+	import { Spinner } from '$lib/components/ui/spinner';
+	import { PLANS, type BillingInterval, type PlanId } from '$lib/plans';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	const paidPlans: PlanId[] = ['individual', 'team', 'instructor'];
+	const tiers: PlanId[] = [
+		'individual',
+		'small_firehouse',
+		'medium_firehouse',
+		'large_firehouse',
+		'training_company'
+	];
 
-	let loading = $state<'portal' | 'checkout' | null>(null);
+	let loading = $state<string | null>(null);
+
+	function priceLabel(planId: PlanId): string {
+		const p = PLANS[planId];
+		if (planId === 'training_company') return '$4,999+/yr';
+		if (p.monthlyPrice !== null && p.annualPrice !== null) return `$${p.monthlyPrice}/mo or $${p.annualPrice}/yr`;
+		if (p.annualPrice !== null) return `$${p.annualPrice}/yr`;
+		return 'Contact sales';
+	}
 
 	async function openPortal() {
 		if (!data.organization?.id) return;
@@ -33,9 +48,10 @@
 		}
 	}
 
-	async function startCheckout(planId: PlanId, billingInterval: 'month' | 'year') {
+	async function startCheckout(planId: PlanId, billingInterval: BillingInterval) {
 		if (!data.organization?.id) return;
-		loading = 'checkout';
+		const key = `checkout:${planId}:${billingInterval}`;
+		loading = key;
 		try {
 			const res = await fetch('/api/stripe/checkout', {
 				method: 'POST',
@@ -111,63 +127,74 @@
 						disabled={loading !== null}
 						onclick={openPortal}
 					>
-						{loading === 'portal' ? 'Opening…' : 'Manage billing & invoices'}
+						{#if loading === 'portal'}
+							<Spinner class="mr-2 h-4 w-4" />
+							Opening…
+						{:else}
+							Manage billing & invoices
+						{/if}
 					</Button>
 				</div>
 			{/if}
 		</section>
 
-		<h2 class="mb-4 text-lg font-semibold">Upgrade or change plan</h2>
-		<div class="grid gap-4 md:grid-cols-3">
-			{#each paidPlans as pid (pid)}
-				{@const p = PLANS[pid]}
-				<div class="flex flex-col rounded-xl border bg-card p-5 shadow-sm">
-					<h3 class="text-base font-semibold">{p.name}</h3>
-					<p class="mt-1 text-sm text-muted-foreground">
-						{#if pid === 'individual'}
-							Unlimited SizeUp · Command self-practice
-						{:else if pid === 'team'}
-							Unlimited SizeUp · Up to 3 members · Instructor-led
-						{:else}
-							Unlimited SizeUp · Up to 15 members · Instructor-led · Video export
-						{/if}
-					</p>
-					<p class="mt-3 text-sm">
-						<span class="text-2xl font-bold">${p.monthlyPrice}</span>
-						<span class="text-muted-foreground">/mo</span>
-					</p>
-					<p class="text-xs text-muted-foreground">or ${p.annualPrice}/yr (save ~2 months)</p>
-					<div class="mt-4 flex flex-1 flex-col justify-end gap-2">
-						<Button
-							class="w-full"
-							disabled={loading !== null || data.planConfig.id === pid}
-							onclick={() => startCheckout(pid, 'month')}
-						>
-							{loading === 'checkout' ? 'Redirecting…' : data.planConfig.id === pid ? 'Current' : 'Subscribe monthly'}
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							class="w-full"
-							disabled={loading !== null || data.planConfig.id === pid}
-							onclick={() => startCheckout(pid, 'year')}
-						>
-							Subscribe yearly
-						</Button>
-					</div>
-				</div>
-			{/each}
+		<h2 class="mb-4 text-lg font-semibold">Recommended limits</h2>
+		<div class="overflow-x-auto rounded-xl border bg-card shadow-sm">
+			<table class="min-w-[820px] w-full text-left text-sm">
+				<thead class="border-b bg-muted/30">
+					<tr>
+						<th class="px-4 py-3 font-semibold">Tier</th>
+						<th class="px-4 py-3 font-semibold">Price</th>
+						<th class="px-4 py-3 font-semibold">Good limits</th>
+						<th class="px-4 py-3 font-semibold">Best for</th>
+						<th class="px-4 py-3 text-right font-semibold">Action</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each tiers as pid (pid)}
+						{@const p = PLANS[pid]}
+						<tr class="border-b last:border-b-0">
+							<td class="px-4 py-4 align-top font-semibold">{p.name}</td>
+							<td class="px-4 py-4 align-top text-muted-foreground">{priceLabel(pid)}</td>
+							<td class="px-4 py-4 align-top text-muted-foreground">{p.limitsSummary}</td>
+							<td class="px-4 py-4 align-top text-muted-foreground">{p.bestFor}</td>
+							<td class="px-4 py-4 align-top">
+								<div class="flex justify-end gap-2">
+									{#if data.planConfig.id === pid}
+										<Button size="sm" variant="outline" disabled={true}>Current</Button>
+									{:else if !p.canSelfServeCheckout}
+										<Button
+											size="sm"
+											variant="outline"
+											href="mailto:sales@3alarmlabs.com?subject=Training%20Company%20pricing"
+										>
+											Contact sales
+										</Button>
+									{:else}
+										{#each p.checkoutIntervals as interval (interval)}
+											{@const key = `checkout:${pid}:${interval}`}
+											<Button
+												size="sm"
+												variant={interval === 'month' ? 'default' : 'outline'}
+												disabled={loading !== null}
+												onclick={() => startCheckout(pid, interval)}
+											>
+												{#if loading === key}
+													<Spinner class="mr-2 h-4 w-4" />
+													Redirecting…
+												{:else}
+													{interval === 'month' ? 'Monthly' : 'Yearly'}
+												{/if}
+											</Button>
+										{/each}
+									{/if}
+								</div>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
 		</div>
-
-		<section class="mt-10 rounded-xl border border-dashed bg-muted/20 p-6">
-			<h3 class="font-semibold">Fire department / Academy</h3>
-			<p class="mt-1 text-sm text-muted-foreground">
-				Custom seats, invoicing, and usage. Contact us for a quote.
-			</p>
-			<Button class="mt-4" variant="outline" href="mailto:sales@3alarmlabs.com?subject=Enterprise%20pricing">
-				Contact sales
-			</Button>
-		</section>
 
 		<p class="mt-8 text-center text-xs text-muted-foreground">
 			<a href={resolve('/')} class="underline">Pricing overview</a>

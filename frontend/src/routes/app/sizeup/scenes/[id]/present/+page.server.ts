@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { organizationMembers, scenes } from '$lib/server/db/schema';
 import { fetchStreetViewStatic } from '$lib/server/streetview-static';
-import { UTApi } from 'uploadthing/server';
+import { getUtApi } from '$lib/server/utapi';
 import { getPlanConfig, normalizePlanId } from '$lib/plans';
 
 function buildSceneAccessWhere(sceneId: string, userId: string, organizationId: string | null) {
@@ -27,7 +27,7 @@ export const load: PageServerLoad = async ({ locals, params, parent }) => {
 			const buffer = await fetchStreetViewStatic(scene.captureMeta.panoId, scene.captureMeta.heading, scene.captureMeta.pitch, scene.captureMeta.fov, '640x640');
 			if (buffer) {
 				const file = new File([new Uint8Array(buffer)], `scene-${params.id}.jpg`, { type: 'image/jpeg' });
-				const utapi = new UTApi();
+				const utapi = getUtApi();
 				const uploadResult = await utapi.uploadFiles(file);
 				if (uploadResult.data?.ufsUrl) {
 					await db.update(scenes).set({ baseImageUrl: uploadResult.data.ufsUrl }).where(eq(scenes.id, params.id));

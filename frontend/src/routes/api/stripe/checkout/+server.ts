@@ -25,6 +25,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 	const plan = PLANS[planId];
 	if (!plan.canSelfServeCheckout) throw error(400, 'Plan not available for self-serve checkout');
+	if (!plan.checkoutIntervals.includes(billingInterval)) throw error(400, 'Billing interval not available for this plan');
 
 	const org = await db.query.organizations.findFirst({
 		where: eq(organizations.id, organizationId),

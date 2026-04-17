@@ -2,12 +2,14 @@
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Spinner } from '$lib/components/ui/spinner';
 	import { deserialize } from '$app/forms';
 	import { invalidate } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let deletingId = $state<string | null>(null);
+	let starting = $state<string | null>(null);
 
 	async function handleDelete(id: string) {
 		if (!confirm('Delete this scenario?')) return;
@@ -21,24 +23,30 @@
 	}
 
 	async function handleStartSession(scenarioId: string, mode: 'self_practice' | 'instructor_led') {
+		if (starting) return;
+		starting = `${scenarioId}:${mode}`;
 		const fd = new FormData();
 		fd.set('scenarioId', scenarioId);
 		fd.set('mode', mode);
-		const resp = await fetch('?/startSession', { method: 'POST', body: fd, credentials: 'same-origin' });
-		const result = deserialize(await resp.text());
-		if (result.type === 'success' && result.data && typeof result.data === 'object' && 'sessionId' in result.data) {
-			const sessionId = String((result.data as { sessionId: string }).sessionId);
-			if (mode === 'instructor_led') {
-				window.location.href = `/app/command/sessions/${sessionId}/instruct`;
-			} else {
-				window.location.href = `/app/command/sessions/${sessionId}`;
+		try {
+			const resp = await fetch('?/startSession', { method: 'POST', body: fd, credentials: 'same-origin' });
+			const result = deserialize(await resp.text());
+			if (result.type === 'success' && result.data && typeof result.data === 'object' && 'sessionId' in result.data) {
+				const sessionId = String((result.data as { sessionId: string }).sessionId);
+				if (mode === 'instructor_led') {
+					window.location.href = `/app/command/sessions/${sessionId}/instruct`;
+				} else {
+					window.location.href = `/app/command/sessions/${sessionId}`;
+				}
+			} else if (result.type === 'failure') {
+				const err =
+					result.data && typeof result.data === 'object' && 'error' in result.data
+						? String((result.data as { error?: string }).error)
+						: 'Could not start session';
+				alert(err);
 			}
-		} else if (result.type === 'failure') {
-			const err =
-				result.data && typeof result.data === 'object' && 'error' in result.data
-					? String((result.data as { error?: string }).error)
-					: 'Could not start session';
-			alert(err);
+		} finally {
+			starting = null;
 		}
 	}
 
@@ -65,9 +73,23 @@
 			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/command/reviews">Past simulations</Button>
 			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/join-organization">Join department</Button>
 			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/command/join">Join session</Button>
-			<Button class="col-span-2 min-h-11 w-full sm:col-span-1 sm:w-auto" href="/app/command/scenarios/new">+ New Scenario</Button>
+			<Button
+				class="col-span-2 min-h-11 w-full sm:col-span-1 sm:w-auto"
+				variant={data.canCreateScenario ? 'default' : 'outline'}
+				disabled={!data.canCreateScenario}
+				href={data.canCreateScenario ? '/app/command/scenarios/new' : resolve('/app/settings/billing')}
+			>
+				+ New Scenario
+			</Button>
 		</div>
 	</div>
+
+	{#if !data.canCreateScenario}
+		<div class="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+			You’ve reached the active scenario limit for the <strong>{data.planConfig.name}</strong> plan.
+			<a href={resolve('/app/settings/billing')} class="font-medium underline">Upgrade</a> to create more.
+		</div>
+	{/if}
 
 	<div class="mt-8 space-y-4">
 		{#if data.scenarios.length === 0}
@@ -112,13 +134,30 @@
 						</div>
 					</div>
 					<div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-row">
-						<Button class="min-h-11 w-full sm:w-auto" size="sm" onclick={() => handleStartSession(scenario.id, 'self_practice')}>Self Practice</Button>
+						<Button
+							class="min-h-11 w-full sm:w-auto"
+							size="sm"
+							disabled={starting !== null}
+							onclick={() => handleStartSession(scenario.id, 'self_practice')}
+						>
+							{#if starting === `${scenario.id}:self_practice`}
+								<Spinner class="mr-2 h-4 w-4" />
+							{/if}
+							Self Practice
+						</Button>
 						{#if data.planConfig.canInstructorLedCommand}
 							<Button
 								class="min-h-11 w-full sm:w-auto"
 								size="sm"
 								variant="outline"
-								onclick={() => handleStartSession(scenario.id, 'instructor_led')}>Instructor-Led</Button>
+								disabled={starting !== null}
+								onclick={() => handleStartSession(scenario.id, 'instructor_led')}
+							>
+								{#if starting === `${scenario.id}:instructor_led`}
+									<Spinner class="mr-2 h-4 w-4" />
+								{/if}
+								Instructor-Led
+							</Button>
 						{:else}
 							<Button
 								class="min-h-11 w-full sm:w-auto"
@@ -130,7 +169,11 @@
 						{/if}
 						<Button class="min-h-11 w-full sm:w-auto" size="sm" variant="outline" href={`/app/command/scenarios/${scenario.id}`}>Edit</Button>
 						<button type="button" onclick={() => handleDelete(scenario.id)} disabled={deletingId === scenario.id} class="inline-flex h-11 w-11 items-center justify-center justify-self-end rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 sm:h-8 sm:w-8" aria-label="Delete">
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+							{#if deletingId === scenario.id}
+								<Spinner class="h-4 w-4" />
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+							{/if}
 						</button>
 					</div>
 				</div>

@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { scenes } from '$lib/server/db/schema';
 import { fetchStreetViewStatic } from '$lib/server/streetview-static';
-import { UTApi } from 'uploadthing/server';
+import { getUtApi } from '$lib/server/utapi';
 
 function toNumber(value: FormDataEntryValue | null) {
 	const n = Number(value);
@@ -52,7 +52,7 @@ export const actions: Actions = {
 				const buffer = await fetchStreetViewStatic(panoId, heading, pitch, fov, '640x640');
 				if (buffer) {
 					const file = new File([new Uint8Array(buffer)], `scene-${sceneId}.jpg`, { type: 'image/jpeg' });
-					const utapi = new UTApi();
+					const utapi = getUtApi();
 					const uploadResult = await utapi.uploadFiles(file);
 					if (uploadResult.data?.ufsUrl) baseImageUrl = uploadResult.data.ufsUrl;
 				}

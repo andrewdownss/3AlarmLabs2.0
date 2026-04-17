@@ -3,7 +3,10 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
+	import { Spinner } from '$lib/components/ui/spinner';
+	import { deserialize } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import KonvaOverlayEditor from '$lib/components/scene-editor/konva-overlay-editor/KonvaOverlayEditor.svelte';
 	import { normalizeAnimationOverlays } from '$lib/components/scene-editor/konva-overlay-editor/overlay-utils';
 	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
@@ -14,6 +17,7 @@
 	let newUnitName = $state('');
 	let isSaving = $state(false);
 	let saveSuccess = $state(false);
+	let uploadingSideField = $state<string | null>(null);
 
 	const SIDES = [
 		{ key: 'alpha', label: 'Side Alpha', field: 'sideAlphaImageUrl' as const },
@@ -95,15 +99,39 @@
 		return out;
 	}
 
+	/** SvelteKit form actions from `fetch` must opt into the action protocol (same as `use:enhance`). */
+	async function submitAction(action: string, body: FormData) {
+		const res = await fetch(`${page.url.pathname}?/${action}`, {
+			method: 'POST',
+			body,
+			credentials: 'same-origin',
+			headers: {
+				accept: 'application/json',
+				'x-sveltekit-action': 'true'
+			}
+		});
+		return deserialize(await res.text());
+	}
+
 	async function handleImageUpload(sideField: string, event: Event) {
+		if (uploadingSideField) return;
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
+		uploadingSideField = sideField;
 		const fd = new FormData();
 		fd.set('side', sideField);
 		fd.set('file', file);
-		await fetch('?/uploadSideImage', { method: 'POST', body: fd, credentials: 'same-origin' });
-		await invalidateAll();
+		try {
+			const result = await submitAction('uploadSideImage', fd);
+			if (result.type === 'failure') {
+				console.error('[uploadSideImage]', result.data);
+			}
+			await invalidateAll();
+			input.value = '';
+		} finally {
+			uploadingSideField = null;
+		}
 	}
 
 	async function handleSave() {
@@ -112,7 +140,11 @@
 			const form = document.getElementById('details-form') as HTMLFormElement;
 			const fd = new FormData(form);
 			fd.set('stageMetadataJson', JSON.stringify(overlaysToJson()));
-			await fetch('?/update', { method: 'POST', body: fd, credentials: 'same-origin' });
+			const result = await submitAction('update', fd);
+			if (result.type === 'failure') {
+				console.error('[update]', result.data);
+				return;
+			}
 			saveSuccess = true;
 			setTimeout(() => (saveSuccess = false), 2000);
 			await invalidateAll();
@@ -125,7 +157,11 @@
 		if (!newUnitName.trim()) return;
 		const fd = new FormData();
 		fd.set('unitName', newUnitName.trim());
-		await fetch('?/addResource', { method: 'POST', body: fd, credentials: 'same-origin' });
+		const result = await submitAction('addResource', fd);
+		if (result.type === 'failure') {
+			console.error('[addResource]', result.data);
+			return;
+		}
 		newUnitName = '';
 		await invalidateAll();
 	}
@@ -133,7 +169,11 @@
 	async function removeResource(unitName: string) {
 		const fd = new FormData();
 		fd.set('unitName', unitName);
-		await fetch('?/removeResource', { method: 'POST', body: fd, credentials: 'same-origin' });
+		const result = await submitAction('removeResource', fd);
+		if (result.type === 'failure') {
+			console.error('[removeResource]', result.data);
+			return;
+		}
 		await invalidateAll();
 	}
 
@@ -151,7 +191,14 @@
 		<div class="flex gap-2">
 			<Button variant="outline" href="/app/command">Back</Button>
 			<Button onclick={handleSave} disabled={isSaving}>
-				{#if isSaving}Saving…{:else if saveSuccess}Saved!{:else}Save Changes{/if}
+				{#if isSaving}
+					<Spinner class="mr-2 h-4 w-4" />
+					Saving…
+				{:else if saveSuccess}
+					Saved!
+				{:else}
+					Save Changes
+				{/if}
 			</Button>
 		</div>
 	</div>
@@ -228,8 +275,22 @@
 						</div>
 					{/if}
 					<div class="flex-1 space-y-1">
-						<label class="text-sm font-medium">{activeSideConfig.label} Image</label>
-						<input type="file" accept="image/*" onchange={(e) => handleImageUpload(activeSideConfig.field, e)} class="text-xs" />
+						<label class="text-sm font-medium" for="side-image-upload">
+							{activeSideConfig.label} Image
+						</label>
+						<div class="flex items-center gap-3">
+							<input
+								id="side-image-upload"
+								type="file"
+								accept="image/*"
+								disabled={uploadingSideField !== null}
+								onchange={(e) => handleImageUpload(activeSideConfig.field, e)}
+								class="text-xs"
+							/>
+							{#if uploadingSideField === activeSideConfig.field}
+								<Spinner class="h-4 w-4 text-muted-foreground" />
+							{/if}
+						</div>
 						{#if !activeImageUrl}
 							<p class="text-xs text-muted-foreground">Upload an image to begin adding overlays for this side.</p>
 						{/if}
@@ -238,8 +299,13 @@
 
 				{#if activeImageUrl}
 					<div>
-						<label class="mb-2 block text-xs font-medium text-muted-foreground uppercase tracking-wider">Stage</label>
-						<div class="flex gap-1">
+						<div
+							id="stage-label"
+							class="mb-2 block text-xs font-medium text-muted-foreground uppercase tracking-wider"
+						>
+							Stage
+						</div>
+						<div class="flex gap-1" role="group" aria-labelledby="stage-label">
 							{#each STAGES as stage}
 								{@const count = getOverlayCount(activeSide, stage.key)}
 								<button

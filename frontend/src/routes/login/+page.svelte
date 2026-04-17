@@ -22,7 +22,7 @@
 	<title>Log in — 3 Alarm Labs</title>
 </svelte:head>
 
-<div class="flex min-h-[100dvh] w-full items-center justify-center px-4 py-6 pb-safe">
+<div class="flex min-h-dvh w-full items-center justify-center px-4 py-6 pb-safe">
 	<Card.Root class="mx-auto w-full max-w-sm">
 		<Card.Header>
 			<div class="flex items-center gap-1.5 text-base font-bold tracking-tight">

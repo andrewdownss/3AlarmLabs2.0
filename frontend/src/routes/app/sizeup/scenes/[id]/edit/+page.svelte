@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Spinner } from '$lib/components/ui/spinner';
 	import KonvaOverlayEditor from '$lib/components/scene-editor/konva-overlay-editor/KonvaOverlayEditor.svelte';
 	import type { PageData } from './$types';
 	import { env } from '$env/dynamic/public';
@@ -10,7 +11,7 @@
 	import { invalidateAll } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
-	let overlays = $state<AnimationOverlay[]>(normalizeAnimationOverlays(data.scene.overlaysJson as AnimationOverlay[] | null));
+	let overlays = $state<AnimationOverlay[]>([]);
 	let isSaving = $state(false);
 	let saveError = $state<string | null>(null);
 	let saveSuccess = $state(false);
@@ -66,6 +67,12 @@
 		} finally { isUpgradingImage = false; }
 	}
 
+	$effect(() => {
+		overlays = normalizeAnimationOverlays(
+			data.scene.overlaysJson as AnimationOverlay[] | null
+		);
+	});
+
 	onMount(() => { if (data.needsHiRes) generateHiRes(); });
 </script>
 
@@ -81,7 +88,14 @@
 			<Button variant="outline" href={`/app/sizeup/scenes/new/capture?sceneId=${encodeURIComponent(data.scene.id)}`}>Recapture</Button>
 			<Button variant="outline" href={`/app/sizeup/scenes/${data.scene.id}/present`}>Present</Button>
 			<Button onclick={handleSave} disabled={isSaving}>
-				{#if isSaving}Saving…{:else if saveSuccess}Saved!{:else}Save scene{/if}
+				{#if isSaving}
+					<Spinner class="mr-2 h-4 w-4" />
+					Saving…
+				{:else if saveSuccess}
+					Saved!
+				{:else}
+					Save scene
+				{/if}
 			</Button>
 		</div>
 	</div>

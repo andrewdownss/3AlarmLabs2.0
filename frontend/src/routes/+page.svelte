@@ -80,37 +80,37 @@
 					<Button class="mt-6 w-full" href={resolve('/signup')}>Get started</Button>
 				</div>
 				<div class="rounded-xl border-2 border-[#E85D20] bg-card p-6 shadow-md">
-					<h3 class="text-lg font-semibold">{PLANS.team.name}</h3>
+					<h3 class="text-lg font-semibold">{PLANS.small_firehouse.name}</h3>
 					<p class="mt-2 text-3xl font-bold">
-						${PLANS.team.monthlyPrice}<span class="text-base font-normal text-muted-foreground">/mo</span>
+						${PLANS.small_firehouse.annualPrice}<span class="text-base font-normal text-muted-foreground">/yr</span>
 					</p>
-					<p class="text-sm text-muted-foreground">${PLANS.team.annualPrice}/yr billed yearly</p>
+					<p class="text-sm text-muted-foreground">Billed yearly</p>
 					<ul class="mt-4 space-y-2 text-sm text-muted-foreground">
-						<li>Up to 3 members</li>
+						<li>Up to 10 members</li>
 						<li>Instructor-led Command</li>
 						<li>Folders · Share links</li>
 					</ul>
 					<Button class="mt-6 w-full bg-[#E85D20] hover:bg-[#D4501A]" href={resolve('/signup')}>Get started</Button>
 				</div>
 				<div class="rounded-xl border bg-card p-6 shadow-sm">
-					<h3 class="text-lg font-semibold">{PLANS.instructor.name}</h3>
+					<h3 class="text-lg font-semibold">{PLANS.medium_firehouse.name}</h3>
 					<p class="mt-2 text-3xl font-bold">
-						${PLANS.instructor.monthlyPrice}<span class="text-base font-normal text-muted-foreground">/mo</span>
+						${PLANS.medium_firehouse.annualPrice}<span class="text-base font-normal text-muted-foreground">/yr</span>
 					</p>
-					<p class="text-sm text-muted-foreground">${PLANS.instructor.annualPrice}/yr billed yearly</p>
+					<p class="text-sm text-muted-foreground">Billed yearly</p>
 					<ul class="mt-4 space-y-2 text-sm text-muted-foreground">
-						<li>Up to 15 members</li>
-						<li>Video export</li>
-						<li>For training providers</li>
+						<li>Up to 30 members</li>
+						<li>Shared org workspace</li>
+						<li>Basic analytics</li>
 					</ul>
 					<Button class="mt-6 w-full" variant="outline" href={resolve('/signup')}>Get started</Button>
 				</div>
 			</div>
 			<div class="mt-10 rounded-xl border border-dashed bg-background p-6 text-center">
-				<h3 class="font-semibold">{PLANS.enterprise.name}</h3>
-				<p class="mt-1 text-sm text-muted-foreground">Volume licensing, invoicing, and custom terms.</p>
+				<h3 class="font-semibold">{PLANS.training_company.name}</h3>
+				<p class="mt-1 text-sm text-muted-foreground">Commercial use, invoicing, and client-facing training rights.</p>
 				<a
-					href="mailto:sales@3alarmlabs.com?subject=Enterprise%20pricing"
+					href="mailto:sales@3alarmlabs.com?subject=Training%20Company%20pricing"
 					class="mt-4 inline-block text-sm font-medium text-[#E85D20] underline"
 				>
 					Contact sales

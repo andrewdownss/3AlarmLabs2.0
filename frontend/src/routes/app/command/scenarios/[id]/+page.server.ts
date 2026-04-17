@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { eq, and, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { organizationMembers, trainerScenarios } from '$lib/server/db/schema';
-import { UTApi } from 'uploadthing/server';
+import { getUtApi } from '$lib/server/utapi';
 
 async function resolveOrgId(userId: string): Promise<string | null> {
 	const membership = await db.query.organizationMembers.findFirst({
@@ -72,8 +72,12 @@ export const actions: Actions = {
 		if (!validSides.includes(side)) return fail(400, { error: 'Invalid side.' });
 		if (!file || file.size === 0) return fail(400, { error: 'No file provided.' });
 
-		const utapi = new UTApi();
+		const utapi = getUtApi();
 		const uploadResult = await utapi.uploadFiles(file);
+		if (uploadResult.error) {
+			console.error('[uploadSideImage]', uploadResult.error);
+			return fail(500, { error: 'Upload failed.', detail: String(uploadResult.error) });
+		}
 		if (!uploadResult.data?.ufsUrl) return fail(500, { error: 'Upload failed.' });
 
 		await db.update(trainerScenarios).set({
