@@ -1,4 +1,9 @@
-import { pgTable, text, timestamp, jsonb, index, pgEnum, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, index, pgEnum, boolean, integer } from 'drizzle-orm/pg-core';
+import type {
+	SelfPacedConfig,
+	SelfPacedScheduledEventKind,
+	SimulationOutcome
+} from '../../lib/self-paced.js';
 
 export const trainerSessionModeEnum = pgEnum('trainer_session_mode', [
 	'instructor_led',
@@ -25,6 +30,8 @@ export const trainerScenarios = pgTable(
 		sideBravoImageUrl: text('side_bravo_image_url'),
 		sideCharlieImageUrl: text('side_charlie_image_url'),
 		sideDeltaImageUrl: text('side_delta_image_url'),
+		dispatchNotes: text('dispatch_notes'),
+		selfPacedConfigJson: jsonb('self_paced_config_json').$type<SelfPacedConfig | null>(),
 		stageMetadataJson: jsonb('stage_metadata_json')
 			.$type<Record<string, unknown>>()
 			.notNull()
@@ -66,7 +73,14 @@ export const trainerSessions = pgTable(
 		activeSide: text('active_side').notNull().default('alpha'),
 		hasStarted: boolean('has_started').notNull().default(false),
 		startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
-		endedAt: timestamp('ended_at', { withTimezone: true, mode: 'date' })
+		endedAt: timestamp('ended_at', { withTimezone: true, mode: 'date' }),
+		pausedAt: timestamp('paused_at', { withTimezone: true, mode: 'date' }),
+		accumulatedPauseMs: integer('accumulated_pause_ms').notNull().default(0),
+		simulationOutcome: text('simulation_outcome')
+			.$type<SimulationOutcome>()
+			.notNull()
+			.default('in_progress'),
+		endReason: text('end_reason')
 	},
 	(table) => [
 		index('trainer_sessions_scenario_id_idx').on(table.scenarioId),
@@ -123,6 +137,26 @@ export const trainerCommandBoardEntries = pgTable(
 			.notNull()
 	},
 	(table) => [index('trainer_command_board_entries_session_id_idx').on(table.sessionId)]
+);
+
+export const trainerScheduledEvents = pgTable(
+	'trainer_scheduled_events',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => trainerSessions.id, { onDelete: 'cascade' }),
+		kind: text('kind').$type<SelfPacedScheduledEventKind>().notNull(),
+		ruleId: text('rule_id'),
+		fireAt: timestamp('fire_at', { withTimezone: true, mode: 'date' }).notNull(),
+		firedAt: timestamp('fired_at', { withTimezone: true, mode: 'date' }),
+		payloadJson: jsonb('payload_json').$type<Record<string, unknown>>().notNull().default({}),
+		createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull()
+	},
+	(table) => [
+		index('trainer_scheduled_events_session_id_idx').on(table.sessionId),
+		index('trainer_scheduled_events_due_idx').on(table.firedAt, table.fireAt)
+	]
 );
 
 export const session = pgTable('session', {

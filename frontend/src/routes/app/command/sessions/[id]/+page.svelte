@@ -26,14 +26,58 @@
 
 	let sessionSeconds = $state(0);
 	let clockInterval: ReturnType<typeof setInterval> | null = null;
+	let tickInterval: ReturnType<typeof setInterval> | null = null;
 	let currentStage = $state('');
 	let currentSide = $state('');
 	let hasStarted = $state(false);
+	let isPaused = $state(false);
+	let isStarting = $state(false);
+	let lastRadioMessageId = $state<string | null>(null);
 	let isRecording = $state(false);
 	let isArmingMic = $state(false);
 	let isProcessing = $state(false);
 	let lastTranscript = $state('');
 	let radioError = $state<string | null>(null);
+
+	const isSelfPaced = $derived(Boolean(data.isSelfPaced));
+
+	/**
+	 * Plain-English list of how this scenario ends and progresses, built from
+	 * the saved self-paced config. Rendered on the pre-start card so the
+	 * student knows what to expect (especially that saying "under control"
+	 * on the radio will end the session when that condition is enabled).
+	 */
+	const selfPacedRunHints = $derived.by<string[]>(() => {
+		if (!isSelfPaced) return [];
+		const cfg = data.scenario.selfPacedConfigJson as
+			| {
+					timeLimitSeconds?: number | null;
+					endConditions?: {
+						onUnderControl?: boolean;
+						onTimelineComplete?: boolean;
+						onTimeExpired?: boolean;
+					} | null;
+			  }
+			| null
+			| undefined;
+		const hints: string[] = [
+			'Hold the red mic button to talk on the radio. Assignments update the command board automatically — tap an entry to fix mistakes.'
+		];
+		const ec = cfg?.endConditions ?? {};
+		const ending: string[] = [];
+		if (ec.onUnderControl) {
+			ending.push('say "fire under control" on the radio');
+		}
+		if (ec.onTimeExpired && typeof cfg?.timeLimitSeconds === 'number' && cfg.timeLimitSeconds > 0) {
+			const mins = Math.floor(cfg.timeLimitSeconds / 60);
+			const secs = cfg.timeLimitSeconds % 60;
+			const label = secs === 0 ? `${mins}:00` : `${mins}:${String(secs).padStart(2, '0')}`;
+			ending.push(`the ${label} time limit is reached`);
+		}
+		ending.push('you tap End Session in the header');
+		hints.push(`The session ends when ${ending.join(', or when ')}.`);
+		return hints;
+	});
 
 	interface BoardEntry {
 		id: string;
@@ -58,7 +102,12 @@
 		lastHydratedSessionId = id;
 		currentStage = data.session.activeStage;
 		currentSide = data.session.activeSide;
-		hasStarted = data.session.mode === 'self_practice' || Boolean(data.session.hasStarted);
+		// Free-form self-practice has no scripted start gate; scripted self-paced
+		// and instructor-led both require an explicit start.
+		hasStarted =
+			(data.session.mode === 'self_practice' && !data.isSelfPaced) ||
+			Boolean(data.session.hasStarted);
+		isPaused = Boolean(data.session.pausedAt);
 		if (hasStarted && data.session.startedAt) {
 			syncClock(new Date(data.session.startedAt).toISOString());
 		}
@@ -211,6 +260,7 @@
 				try {
 					const resp = await fetch('/api/trainer/radio', { method: 'POST', body: fd, credentials: 'include' });
 					let result: {
+						messageId?: string;
 						transcript?: string;
 						command?: Record<string, unknown>;
 						error?: string;
@@ -226,6 +276,7 @@
 							typeof result.error === 'string' ? result.error : `Radio request failed (${resp.status})`;
 						return;
 					}
+					if (result.messageId) lastRadioMessageId = result.messageId;
 					if (result.transcript) lastTranscript = result.transcript;
 					const cmd = result.command;
 					if (cmd) {
@@ -336,8 +387,118 @@
 		if (!confirm('End this session?')) return;
 		addTimelineEvent('END', 'Session ended');
 		const sessionId = data.session.id;
-		socket?.emit('trainer:session:end', { sessionId });
+		if (isSelfPaced) {
+			try {
+				await fetch(`/api/trainer/sessions/${sessionId}/end`, {
+					method: 'POST',
+					credentials: 'include',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ outcome: 'completed', reason: 'ended_by_user' })
+				});
+			} catch (err) {
+				console.error('End session failed:', err);
+			}
+		} else {
+			socket?.emit('trainer:session:end', { sessionId });
+		}
 		goToReview();
+	}
+
+	async function startSelfPaced() {
+		if (isStarting) return;
+		isStarting = true;
+		try {
+			const resp = await fetch(`/api/trainer/sessions/${data.session.id}/start`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			if (!resp.ok) {
+				const err = await resp.json().catch(() => ({}));
+				radioError = typeof err.error === 'string' ? err.error : 'Could not start scenario';
+				return;
+			}
+			const body: { startedAt?: string } = await resp.json();
+			if (body.startedAt) syncClock(body.startedAt);
+			hasStarted = true;
+			isPaused = false;
+		} finally {
+			isStarting = false;
+		}
+	}
+
+	async function pauseSelfPaced() {
+		const resp = await fetch(`/api/trainer/sessions/${data.session.id}/pause`, {
+			method: 'POST',
+			credentials: 'include'
+		});
+		if (resp.ok) isPaused = true;
+	}
+
+	async function resumeSelfPaced() {
+		const resp = await fetch(`/api/trainer/sessions/${data.session.id}/resume`, {
+			method: 'POST',
+			credentials: 'include'
+		});
+		if (resp.ok) isPaused = false;
+	}
+
+	async function tickSelfPaced() {
+		try {
+			await fetch(`/api/trainer/sessions/${data.session.id}/tick`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+		} catch (err) {
+			console.error('tick failed', err);
+		}
+	}
+
+	async function correctBoardEntry(entry: BoardEntry, patch: Partial<BoardEntry>) {
+		const body = {
+			unitName: entry.unitName,
+			division: patch.division ?? entry.division,
+			assignment: patch.assignment ?? entry.assignment,
+			status: patch.status ?? entry.status,
+			radioMessageId: lastRadioMessageId ?? undefined
+		};
+		const resp = await fetch(`/api/trainer/sessions/${data.session.id}/board/correct`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		if (resp.ok) {
+			addTimelineEvent('FIX', `Corrected ${entry.unitName}`);
+		}
+	}
+
+	let editingEntry = $state<BoardEntry | null>(null);
+	let editDivision = $state('');
+	let editAssignment = $state('');
+	let editStatus = $state('');
+
+	const STATUS_CHOICES = ['Assigned', 'En Route', 'On Scene', 'Operating', 'PAR Completed', 'Available', 'Out of Service'];
+	const DIVISION_CHOICES = ['Basement', 'Div 1', 'Div 2', 'Div 3', 'Roof', 'RIC', 'Med', 'Reserve'];
+
+	function openEdit(entry: BoardEntry) {
+		editingEntry = entry;
+		editDivision = entry.division;
+		editAssignment = entry.assignment;
+		editStatus = entry.status;
+	}
+
+	function closeEdit() {
+		editingEntry = null;
+	}
+
+	async function saveEdit() {
+		if (!editingEntry) return;
+		await correctBoardEntry(editingEntry, {
+			division: editDivision,
+			assignment: editAssignment,
+			status: editStatus
+		});
+		closeEdit();
 	}
 
 	function joinRoom() {
@@ -345,7 +506,25 @@
 	}
 
 	onMount(() => {
-		clockInterval = setInterval(() => { sessionSeconds++; }, 1000);
+		clockInterval = setInterval(() => {
+			if (!isPaused) sessionSeconds++;
+		}, 1000);
+
+		if (isSelfPaced) {
+			tickInterval = setInterval(() => {
+				if (hasStarted && !isPaused) void tickSelfPaced();
+			}, 2000);
+		}
+
+		socket?.on('trainer:session:paused', () => {
+			isPaused = true;
+			addTimelineEvent('PAUSE', 'Session paused');
+		});
+
+		socket?.on('trainer:session:resumed', () => {
+			isPaused = false;
+			addTimelineEvent('RESUME', 'Session resumed');
+		});
 
 		socket?.on('trainer:state:dispatched', (payload: TrainerStateDispatchedPayload) => {
 			if (payload.stage) { currentStage = payload.stage; addTimelineEvent('STAGE', `Stage changed to ${stageLabels[payload.stage] ?? payload.stage}`); }
@@ -397,9 +576,12 @@
 		}
 
 		if (clockInterval) clearInterval(clockInterval);
+		if (tickInterval) clearInterval(tickInterval);
 		socket?.off('connect', joinRoom);
 		socket?.off('trainer:state:dispatched');
 		socket?.off('trainer:session:started');
+		socket?.off('trainer:session:paused');
+		socket?.off('trainer:session:resumed');
 		socket?.off('trainer:board:updated');
 		socket?.off('trainer:board:removed');
 		socket?.off('trainer:board:status-changed');
@@ -415,21 +597,80 @@
 	<header class="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex min-w-0 flex-wrap items-center gap-2 gap-y-1.5">
 			<h1 class="max-w-full truncate text-base font-semibold sm:text-lg">{data.scenario.title}</h1>
-			<Badge class="shrink-0 bg-green-500 text-white">LIVE</Badge>
+			<Badge class="shrink-0 bg-green-500 text-white">{isPaused ? 'PAUSED' : 'LIVE'}</Badge>
 			<span class="shrink-0 font-mono text-xs text-muted-foreground sm:text-sm">{formatClock(sessionSeconds)}</span>
-			<Badge class="shrink-0" variant="outline">{data.session.mode === 'self_practice' ? 'Self Practice' : 'Instructor-Led'}</Badge>
+			<Badge class="shrink-0" variant="outline">
+				{isSelfPaced ? 'Self-Paced' : data.session.mode === 'self_practice' ? 'Self Practice' : 'Instructor-Led'}
+			</Badge>
 		</div>
-		<Button variant="destructive" class="min-h-11 w-full shrink-0 sm:w-auto" size="sm" onclick={endSession}>End Session</Button>
+		<div class="flex w-full shrink-0 gap-2 sm:w-auto">
+			{#if isSelfPaced && hasStarted}
+				{#if isPaused}
+					<Button variant="outline" class="min-h-11 flex-1 sm:flex-none" size="sm" onclick={resumeSelfPaced}>Resume</Button>
+				{:else}
+					<Button variant="outline" class="min-h-11 flex-1 sm:flex-none" size="sm" onclick={pauseSelfPaced}>Pause</Button>
+				{/if}
+			{/if}
+			<Button variant="destructive" class="min-h-11 flex-1 sm:flex-none" size="sm" onclick={endSession}>End Session</Button>
+		</div>
 	</header>
 
 	{#if !hasStarted}
-		<div class="flex flex-1 items-center justify-center p-6">
-			<div class="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
-				<div class="mx-auto mb-4 h-10 w-10 animate-pulse rounded-full bg-muted"></div>
-				<h2 class="text-xl font-semibold">Waiting for instructor to start</h2>
-				<p class="mt-2 text-sm text-muted-foreground">You're connected. The simulation will begin once your instructor starts it.</p>
+		{#if isSelfPaced}
+			<div class="flex flex-1 items-start justify-center overflow-y-auto p-4 sm:p-6">
+				<div class="w-full max-w-2xl space-y-4">
+					<div class="rounded-2xl border bg-card p-6 shadow-sm">
+						<h2 class="text-xl font-semibold">{data.scenario.title}</h2>
+						{#if data.scenario.description}
+							<p class="mt-1 text-sm text-muted-foreground">{data.scenario.description}</p>
+						{/if}
+						{#if data.scenario.dispatchNotes}
+							<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+								<p class="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Dispatch notes</p>
+								<p class="mt-1 whitespace-pre-line">{data.scenario.dispatchNotes}</p>
+							</div>
+						{/if}
+						{#if data.scenario.sideAlphaImageUrl}
+							<img src={data.scenario.sideAlphaImageUrl} alt="Initial scene" class="mt-4 h-48 w-full rounded-lg object-cover" />
+						{/if}
+						{#if (data.scenario.defaultResources ?? []).length > 0}
+							<div class="mt-4">
+								<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Available resources</p>
+								<div class="mt-2 flex flex-wrap gap-1.5">
+									{#each data.scenario.defaultResources ?? [] as resource (resource.unitName)}
+										<Badge variant="secondary">{resource.unitName}</Badge>
+									{/each}
+								</div>
+							</div>
+						{/if}
+						{#if selfPacedRunHints.length > 0}
+							<div class="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+								<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">How this runs</p>
+								<ul class="mt-1.5 space-y-1 text-sm text-foreground">
+									{#each selfPacedRunHints as hint}
+										<li class="flex gap-2"><span class="text-muted-foreground" aria-hidden="true">•</span><span>{hint}</span></li>
+									{/each}
+								</ul>
+							</div>
+						{/if}
+						<Button class="mt-6 min-h-12 w-full" disabled={isStarting} onclick={startSelfPaced}>
+							{isStarting ? 'Starting…' : 'Start Scenario'}
+						</Button>
+						{#if radioError}
+							<p class="mt-2 text-center text-xs text-destructive">{radioError}</p>
+						{/if}
+					</div>
+				</div>
 			</div>
-		</div>
+		{:else}
+			<div class="flex flex-1 items-center justify-center p-6">
+				<div class="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
+					<div class="mx-auto mb-4 h-10 w-10 animate-pulse rounded-full bg-muted"></div>
+					<h2 class="text-xl font-semibold">Waiting for instructor to start</h2>
+					<p class="mt-2 text-sm text-muted-foreground">You're connected. The simulation will begin once your instructor starts it.</p>
+				</div>
+			</div>
+		{/if}
 	{:else}
 	<div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
 		<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-none">
@@ -486,12 +727,15 @@
 								</div>
 								<div class="min-h-0 flex-1 space-y-1 overflow-y-auto p-1">
 									{#each entriesForColumn(boardEntries as BoardEntryLike[], col.key) as entry (entry.id ?? entry.unitName)}
-										<div
-											class="rounded border px-1.5 py-1 text-[9px] font-medium leading-tight {STATUS_COLORS[entry.status] ?? 'bg-gray-50 text-gray-700'}"
+										<button
+											type="button"
+											onclick={() => openEdit(entry as BoardEntry)}
+											class="w-full rounded border px-1.5 py-1 text-left text-[9px] font-medium leading-tight transition-colors hover:ring-1 hover:ring-primary {STATUS_COLORS[entry.status] ?? 'bg-gray-50 text-gray-700'}"
+											title="Click to fix this entry"
 										>
 											{formatUnitAssignmentLine(entry)}
 											<div class="mt-0.5 text-[8px] opacity-70">{entry.status}</div>
-										</div>
+										</button>
 									{/each}
 								</div>
 							</div>
@@ -559,5 +803,43 @@
 			</div>
 		</aside>
 	</div>
+	{/if}
+
+	{#if editingEntry}
+		<div class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Fix board entry">
+			<button type="button" class="absolute inset-0 bg-black/40" aria-label="Close" onclick={closeEdit}></button>
+			<div class="relative w-full max-w-sm rounded-xl border bg-card p-5 shadow-lg">
+				<h3 class="text-base font-semibold">Fix {editingEntry.unitName}</h3>
+				<p class="mt-1 text-xs text-muted-foreground">Correct the parsed assignment if the radio was misheard.</p>
+
+				<div class="mt-4 space-y-3">
+					<div>
+						<label for="edit-division" class="block text-xs font-medium">Division</label>
+						<select id="edit-division" bind:value={editDivision} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+							{#each DIVISION_CHOICES as d (d)}
+								<option value={d}>{d}</option>
+							{/each}
+						</select>
+					</div>
+					<div>
+						<label for="edit-assignment" class="block text-xs font-medium">Assignment</label>
+						<input id="edit-assignment" bind:value={editAssignment} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+					</div>
+					<div>
+						<label for="edit-status" class="block text-xs font-medium">Status</label>
+						<select id="edit-status" bind:value={editStatus} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+							{#each STATUS_CHOICES as s (s)}
+								<option value={s}>{s}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+
+				<div class="mt-5 flex justify-end gap-2">
+					<Button variant="outline" size="sm" onclick={closeEdit}>Cancel</Button>
+					<Button size="sm" onclick={saveEdit}>Save</Button>
+				</div>
+			</div>
+		</div>
 	{/if}
 </div>

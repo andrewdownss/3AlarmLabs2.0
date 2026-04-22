@@ -2,8 +2,9 @@ import type { Server, Socket } from 'socket.io';
 import { db } from '../db/index.js';
 import { trainerSessions, trainerSessionEvents, trainerCommandBoardEntries } from '../db/schema/trainer.js';
 import { eq, and } from 'drizzle-orm';
-import { redis } from '../config/redis.js';
 import { getSessionForUser } from '../middleware/authz.js';
+import { applyStateDispatch } from '../lib/state-dispatch.js';
+import { evaluateAfterBoardChange } from '../lib/self-paced-runtime.js';
 
 function getSocketUserId(socket: Socket): string | undefined {
 	return (socket as Socket & { userId?: string }).userId;
@@ -42,8 +43,6 @@ function untrackTrainerSession(socket: Socket, sessionId: string) {
 }
 
 export function registerSessionHandlers(io: Server, socket: Socket) {
-	const VALID_STAGES = ['incipient', 'growth', 'fully_developed', 'decay'];
-
 	socket.on('trainer:session:join', async (data: { sessionId: string; role: string }) => {
 		const userId = getSocketUserId(socket);
 		if (!userId) { socket.emit('error', { message: 'Not authenticated' }); return; }
@@ -92,31 +91,7 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 		const session = await getSessionForUser(sessionId, userId);
 		if (!session) return;
 
-		const VALID_SIDES = ['alpha', 'bravo', 'charlie', 'delta'];
-		const dbUpdates: Record<string, string> = {};
-
-		if (stateUpdate.stage) {
-			if (!VALID_STAGES.includes(stateUpdate.stage)) return;
-			dbUpdates.activeStage = stateUpdate.stage;
-		}
-		if (stateUpdate.side) {
-			if (!VALID_SIDES.includes(stateUpdate.side)) return;
-			dbUpdates.activeSide = stateUpdate.side;
-		}
-
-		if (Object.keys(dbUpdates).length > 0) {
-			await db.update(trainerSessions).set(dbUpdates).where(eq(trainerSessions.id, sessionId));
-		}
-
-		await db.insert(trainerSessionEvents).values({
-			id: crypto.randomUUID(), sessionId,
-			eventType: 'state_dispatched',
-			payloadJson: stateUpdate
-		});
-
-		await redis.set(`session:${sessionId}:state`, JSON.stringify(stateUpdate), 'EX', 3600);
-
-		socket.to(`session:${sessionId}`).emit('trainer:state:dispatched', stateUpdate);
+		await applyStateDispatch(io, sessionId, stateUpdate, { source: 'instructor' });
 	});
 
 	socket.on('trainer:session:start', async (data: { sessionId: string }) => {
@@ -176,6 +151,73 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 		io.to(`session:${data.sessionId}`).emit('trainer:board:updated', {
 			entry: { id: entryId, division: data.division, unitName: data.unitName, assignment: data.assignment ?? '', status: data.status ?? 'Assigned' }
 		});
+
+		await evaluateAfterBoardChange(io, data.sessionId);
+	});
+
+	socket.on('trainer:board:correct', async (data: {
+		sessionId: string;
+		unitName: string;
+		division?: string;
+		assignment?: string;
+		status?: string;
+		radioMessageId?: string;
+	}) => {
+		if (!data.sessionId || !data.unitName) return;
+		const userId = getSocketUserId(socket);
+		if (!userId) return;
+		const session = await getSessionForUser(data.sessionId, userId);
+		if (!session) return;
+
+		const existing = await db.select().from(trainerCommandBoardEntries)
+			.where(and(
+				eq(trainerCommandBoardEntries.sessionId, data.sessionId),
+				eq(trainerCommandBoardEntries.unitName, data.unitName)
+			)).limit(1);
+
+		const division = data.division?.trim() || existing[0]?.division || 'Unassigned';
+		const assignment = data.assignment ?? existing[0]?.assignment ?? '';
+		const status = data.status?.trim() || existing[0]?.status || 'Assigned';
+
+		let entryId: string;
+		if (existing.length > 0) {
+			entryId = existing[0].id;
+			await db.update(trainerCommandBoardEntries)
+				.set({ division, assignment, status, location: division, lastUpdatedAt: new Date() })
+				.where(eq(trainerCommandBoardEntries.id, entryId));
+		} else {
+			entryId = crypto.randomUUID();
+			await db.insert(trainerCommandBoardEntries).values({
+				id: entryId,
+				sessionId: data.sessionId,
+				division,
+				unitName: data.unitName,
+				assignment,
+				location: division,
+				status
+			});
+		}
+
+		await db.insert(trainerSessionEvents).values({
+			id: crypto.randomUUID(),
+			sessionId: data.sessionId,
+			eventType: 'command_board_corrected',
+			payloadJson: {
+				entryId,
+				unitName: data.unitName,
+				division,
+				assignment,
+				status,
+				correctedBy: userId,
+				radioMessageId: data.radioMessageId ?? null
+			}
+		});
+
+		io.to(`session:${data.sessionId}`).emit('trainer:board:updated', {
+			entry: { id: entryId, division, unitName: data.unitName, assignment, status }
+		});
+
+		await evaluateAfterBoardChange(io, data.sessionId);
 	});
 
 	socket.on('trainer:board:remove', async (data: { sessionId: string; unitName: string }) => {
@@ -190,6 +232,7 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 				eq(trainerCommandBoardEntries.unitName, data.unitName)
 			));
 		io.to(`session:${data.sessionId}`).emit('trainer:board:removed', { unitName: data.unitName });
+		await evaluateAfterBoardChange(io, data.sessionId);
 	});
 
 	socket.on('trainer:board:update-status', async (data: { sessionId: string; unitName: string; status: string }) => {
@@ -208,6 +251,7 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 			unitName: data.unitName,
 			status: data.status
 		});
+		await evaluateAfterBoardChange(io, data.sessionId);
 	});
 
 	socket.on('trainer:session:end', async (data: { sessionId: string }) => {

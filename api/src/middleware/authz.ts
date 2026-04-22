@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { trainerSessions } from '../db/schema/trainer.js';
+import type { SimulationOutcome } from '../lib/self-paced.js';
 
 export interface SessionRow {
 	id: string;
@@ -15,6 +16,10 @@ export interface SessionRow {
 	hasStarted: boolean;
 	startedAt: Date;
 	endedAt: Date | null;
+	pausedAt: Date | null;
+	accumulatedPauseMs: number;
+	simulationOutcome: SimulationOutcome;
+	endReason: string | null;
 }
 
 function isParticipant(session: SessionRow, userId: string): boolean {

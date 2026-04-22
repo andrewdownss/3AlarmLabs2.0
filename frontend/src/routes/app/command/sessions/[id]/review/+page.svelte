@@ -117,12 +117,78 @@
 		const s = seconds % 60;
 		return `${m}m ${s}s`;
 	});
+
+	const expectedActions = $derived(
+		((data.scenario as { selfPacedConfigJson?: { expectedActions?: unknown } | null })
+			.selfPacedConfigJson?.expectedActions ?? []) as Array<{
+			id: string;
+			label: string;
+			critical?: boolean;
+			deadlineSeconds?: number;
+		}>
+	);
+
+	type ActionStatus = { status: 'completed' | 'delayed' | 'missed' | 'pending'; atSeconds?: number };
+
+	const expectedActionStatus = $derived.by(() => {
+		const map = new Map<string, ActionStatus>();
+		for (const action of expectedActions) map.set(action.id, { status: 'pending' });
+		for (const evt of data.events) {
+			const id = (evt.payloadJson as { actionId?: unknown })?.actionId;
+			if (typeof id !== 'string') continue;
+			const at = (evt.payloadJson as { atSeconds?: unknown })?.atSeconds;
+			const atSeconds = typeof at === 'number' ? at : undefined;
+			if (evt.eventType === 'expected_action_completed') {
+				map.set(id, { status: 'completed', atSeconds });
+			} else if (evt.eventType === 'expected_action_delayed') {
+				map.set(id, { status: 'delayed', atSeconds });
+			} else if (evt.eventType === 'expected_action_missed' && map.get(id)?.status === 'pending') {
+				map.set(id, { status: 'missed', atSeconds });
+			}
+		}
+		return map;
+	});
+
+	const outcomeLabel: Record<string, string> = {
+		completed: 'Completed',
+		failed: 'Failed',
+		timeout: 'Time Expired',
+		in_progress: 'In Progress'
+	};
+
+	const outcomeColor: Record<string, string> = {
+		completed: 'bg-green-600 text-white',
+		failed: 'bg-red-600 text-white',
+		timeout: 'bg-amber-600 text-white',
+		in_progress: 'bg-gray-500 text-white'
+	};
+
+	const actionStatusLabel: Record<ActionStatus['status'], string> = {
+		completed: 'Completed',
+		delayed: 'Late',
+		missed: 'Missed',
+		pending: 'Not addressed'
+	};
+
+	const actionStatusColor: Record<ActionStatus['status'], string> = {
+		completed: 'bg-green-100 text-green-900 border-green-300',
+		delayed: 'bg-amber-100 text-amber-900 border-amber-300',
+		missed: 'bg-red-100 text-red-900 border-red-300',
+		pending: 'bg-gray-100 text-gray-700 border-gray-300'
+	};
+
+	function formatOffsetSeconds(s?: number) {
+		if (typeof s !== 'number') return '—';
+		const m = Math.floor(s / 60);
+		const sec = s % 60;
+		return `${m}:${String(sec).padStart(2, '0')}`;
+	}
 </script>
 
-<main class="mx-auto w-full max-w-4xl px-4 py-6 pb-safe sm:py-10">
+<main class="mx-auto w-full max-w-6xl px-5 py-8 pb-safe sm:px-8 sm:py-12">
 	{#if reviewCaps.eventsTruncated || reviewCaps.radioTruncated}
 		<div
-			class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+			class="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-5 py-4 text-base text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
 			role="status"
 		>
 			<p class="font-medium">Long session — timeline is partially loaded</p>
@@ -136,14 +202,22 @@
 			</ul>
 		</div>
 	{/if}
-	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+	<div class="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
 		<div class="min-w-0">
-			<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Session Review</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{data.scenario.title}</p>
-			<div class="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
+			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Session Review</h1>
+			<p class="mt-2 text-base text-muted-foreground sm:text-lg">{data.scenario.title}</p>
+			<div class="mt-3 flex flex-wrap items-center gap-2.5 text-base text-muted-foreground">
 				<span>{new Date(data.session.startedAt).toLocaleDateString()}</span>
 				<Badge variant="outline">Duration: {duration}</Badge>
-				<Badge variant="outline">{data.session.mode === 'self_practice' ? 'Self Practice' : 'Instructor-Led'}</Badge>
+				<Badge variant="outline">{data.session.mode === 'self_practice' ? (expectedActions.length > 0 ? 'Self-Paced' : 'Self Practice') : 'Instructor-Led'}</Badge>
+				{#if data.session.endedAt}
+					<span class="rounded-full px-3 py-1 text-sm font-semibold {outcomeColor[data.session.simulationOutcome ?? 'completed'] ?? outcomeColor.completed}">
+						{outcomeLabel[data.session.simulationOutcome ?? 'completed'] ?? 'Completed'}
+					</span>
+					{#if data.session.endReason}
+						<span class="text-sm text-muted-foreground">{data.session.endReason}</span>
+					{/if}
+				{/if}
 			</div>
 		</div>
 		<div class="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
@@ -152,37 +226,37 @@
 		</div>
 	</div>
 
-	<div class="space-y-6">
+	<div class="space-y-8">
 		{#each groupedStages as group, idx (idx)}
-			<div class="rounded-xl border">
-				<div class="flex items-center gap-3 border-b px-4 py-3">
-					<span class="rounded px-2 py-0.5 text-xs font-bold text-white {stageBadgeClass[group.stage] ?? 'bg-gray-500'}">{stageLabels[group.stage] ?? group.stage}</span>
+			<div class="rounded-xl border shadow-sm">
+				<div class="flex items-center gap-3 border-b px-5 py-4 sm:px-6">
+					<span class="rounded px-2.5 py-1 text-sm font-bold text-white {stageBadgeClass[group.stage] ?? 'bg-gray-500'}">{stageLabels[group.stage] ?? group.stage}</span>
 					{#if group.startTime}
-						<span class="text-xs text-muted-foreground">Started at {group.startTime}</span>
+						<span class="text-sm text-muted-foreground">Started at {group.startTime}</span>
 					{/if}
 				</div>
 
 				<div class="divide-y">
 					{#each group.events as event (event.id)}
-						<div class="px-4 py-3">
+						<div class="px-5 py-4 sm:px-6">
 							<div class="flex items-center gap-2">
-								<span class="text-xs font-mono text-muted-foreground">{formatTime(event.timestamp)}</span>
+								<span class="text-sm font-mono text-muted-foreground">{formatTime(event.timestamp)}</span>
 								<Badge
 									variant="outline"
-									class="text-[10px] {event.eventType === 'size_up' ? 'border-amber-300 bg-amber-50 text-amber-900' : ''}"
+									class="text-xs {event.eventType === 'size_up' ? 'border-amber-300 bg-amber-50 text-amber-900' : ''}"
 								>{event.eventType.replace(/_/g, ' ')}</Badge>
 							</div>
 							{#if event.eventType === 'state_dispatched'}
-								<div class="mt-1 text-sm">
+								<div class="mt-2 text-base leading-relaxed">
 									{#if event.payloadJson?.stage}Stage changed to {stageLabels[String(event.payloadJson.stage)] ?? event.payloadJson.stage}{/if}
 									{#if event.payloadJson?.side} Viewing Side {String(event.payloadJson.side).charAt(0).toUpperCase() + String(event.payloadJson.side).slice(1)}{/if}
 									{#if event.payloadJson?.hazard}<span class="text-red-600">Hazard: {event.payloadJson.hazard}</span>{/if}
 									{#if event.payloadJson?.update}<span class="text-blue-600">Update: {event.payloadJson.update}</span>{/if}
 								</div>
 							{:else if event.eventType === 'size_up'}
-								<div class="mt-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-									<p class="text-xs font-semibold uppercase tracking-wide text-amber-800">On-scene size-up</p>
-									<p class="mt-1">{String(event.payloadJson?.summary ?? event.payloadJson?.transcript ?? '')}</p>
+								<div class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-950">
+									<p class="text-sm font-semibold uppercase tracking-wide text-amber-800">On-scene size-up</p>
+									<p class="mt-2">{String(event.payloadJson?.summary ?? event.payloadJson?.transcript ?? '')}</p>
 								</div>
 							{/if}
 						</div>
@@ -192,24 +266,24 @@
 						{@const rmt = String(radio.parsedCommandJson?.messageType ?? '').toLowerCase()}
 						{@const rAssign = Array.isArray(radio.parsedCommandJson?.assignments) ? radio.parsedCommandJson.assignments : []}
 						{@const rSizeUp = String(radio.parsedCommandJson?.sizeUpSummary ?? '').trim()}
-						<div class="px-4 py-3">
+						<div class="px-5 py-4 sm:px-6">
 							<div class="flex items-center gap-2">
-								<span class="text-xs font-mono text-muted-foreground">{formatTime(radio.createdAt)}</span>
-								<Badge variant="outline" class="bg-orange-50 text-[10px] text-orange-700">RADIO</Badge>
+								<span class="text-sm font-mono text-muted-foreground">{formatTime(radio.createdAt)}</span>
+								<Badge variant="outline" class="bg-orange-50 text-xs text-orange-700">RADIO</Badge>
 							</div>
 							{#if radio.transcript}
-								<p class="mt-1 text-sm italic">"{radio.transcript}"</p>
+								<p class="mt-2 text-base italic leading-relaxed">"{radio.transcript}"</p>
 							{/if}
 							{#if radio.audioUrl}
-								<audio controls class="mt-2 h-8 w-full" src={radio.audioUrl} preload="none"></audio>
+								<audio controls class="mt-3 h-11 w-full max-w-2xl" src={radio.audioUrl} preload="none"></audio>
 							{/if}
 							{#if rSizeUp}
-								<div class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+								<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
 									<span class="font-semibold">Size-up</span>
 									<p class="mt-1 italic">"{rSizeUp}"</p>
 								</div>
 							{:else if rmt === 'size_up'}
-								<div class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+								<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
 									<span class="font-semibold">Size-up</span>
 									<p class="mt-1 italic">
 										"{String(radio.parsedCommandJson?.summary ?? radio.transcript ?? '')}"
@@ -217,7 +291,7 @@
 								</div>
 							{/if}
 							{#if rAssign.length > 0}
-								<div class="mt-2 space-y-1.5 rounded-md border bg-muted/40 px-3 py-2 text-xs">
+								<div class="mt-3 space-y-2 rounded-md border bg-muted/40 px-4 py-3 text-sm">
 									<p class="font-semibold text-muted-foreground">Assignments</p>
 									<ul class="list-inside list-disc space-y-1">
 										{#each rAssign as a, i (i)}
@@ -236,7 +310,7 @@
 									</ul>
 								</div>
 							{:else if radio.parsedCommandJson?.unitName}
-								<div class="mt-2 rounded bg-muted/50 px-3 py-2 text-xs">
+								<div class="mt-3 rounded bg-muted/50 px-4 py-3 text-sm">
 									<span class="font-medium">{radio.parsedCommandJson.unitName}</span>
 									{#if radio.parsedCommandJson.assignment} — {radio.parsedCommandJson.assignment}{/if}
 									{#if radio.parsedCommandJson.boardColumn || radio.parsedCommandJson.division}
@@ -251,27 +325,64 @@
 				</div>
 			</div>
 		{:else}
-			<div class="rounded-xl border border-dashed p-12 text-center text-muted-foreground">
+			<div class="rounded-xl border border-dashed p-14 text-center text-base text-muted-foreground">
 				No events recorded for this session.
 			</div>
 		{/each}
 	</div>
 
-	<div class="mt-8 rounded-xl border">
-		<div class="border-b px-4 py-3"><h3 class="text-sm font-semibold">Final Command Board</h3></div>
-		<div class="p-2 sm:p-3">
+	{#if expectedActions.length > 0}
+		<div class="mt-10 rounded-xl border shadow-sm">
+			<div class="border-b px-5 py-4 sm:px-6">
+				<h3 class="text-lg font-semibold">Expected Actions</h3>
+				<p class="mt-1 text-sm text-muted-foreground">
+					Scripted assignments the instructor expected during this scenario.
+				</p>
+			</div>
+			<ul class="divide-y">
+				{#each expectedActions as action (action.id)}
+					{@const status = expectedActionStatus.get(action.id) ?? { status: 'pending' as const }}
+					<li class="flex items-start justify-between gap-4 px-5 py-4 text-base sm:px-6">
+						<div class="min-w-0">
+							<p class="font-medium">{action.label}</p>
+							<p class="mt-1 text-sm text-muted-foreground">
+								{#if action.deadlineSeconds != null}
+									Deadline: {formatOffsetSeconds(action.deadlineSeconds)}
+								{:else}
+									No deadline
+								{/if}
+								{#if action.critical}<span class="ml-2 text-red-600">Critical</span>{/if}
+							</p>
+						</div>
+						<div class="shrink-0 text-right">
+							<span class="rounded-full border px-3 py-1 text-sm font-semibold {actionStatusColor[status.status]}">
+								{actionStatusLabel[status.status]}
+							</span>
+							{#if status.atSeconds != null}
+								<p class="mt-1 text-xs text-muted-foreground">at {formatOffsetSeconds(status.atSeconds)}</p>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
+
+	<div class="mt-10 rounded-xl border shadow-sm">
+		<div class="border-b px-5 py-4 sm:px-6"><h3 class="text-lg font-semibold">Final Command Board</h3></div>
+		<div class="p-3 sm:p-5">
 			<div class="overflow-x-auto pb-2 sm:overflow-x-visible sm:pb-0">
-			<div class="flex w-max min-w-full gap-1.5 sm:w-full sm:min-w-0">
+			<div class="flex w-max min-w-full gap-2 sm:w-full sm:min-w-0">
 				{#each COMMAND_BOARD_COLUMNS as col (col.key)}
-					<div class="flex w-[4.75rem] shrink-0 flex-col border bg-muted/15 sm:w-[5.25rem] lg:min-w-0 lg:w-0 lg:flex-1">
-						<div class="flex min-h-10 items-center justify-center border-b bg-muted/40 px-2 py-2 text-center text-[10px] font-bold uppercase text-muted-foreground">
+					<div class="flex w-[6.25rem] shrink-0 flex-col border bg-muted/15 sm:w-[7rem] lg:min-w-0 lg:w-0 lg:flex-1">
+						<div class="flex min-h-12 items-center justify-center border-b bg-muted/40 px-2 py-2.5 text-center text-xs font-bold uppercase text-muted-foreground">
 							{col.header || '\u00a0'}
 						</div>
-						<div class="flex flex-col gap-1.5 p-2">
+						<div class="flex flex-col gap-2 p-2.5">
 							{#each entriesForColumn(reviewBoardEntries, col.key) as entry (entry.id ?? entry.unitName)}
-								<div class="rounded border px-2 py-1.5 text-xs">
+								<div class="rounded border px-2.5 py-2 text-sm">
 									<div class="font-medium">{formatUnitAssignmentLine(entry)}</div>
-									<Badge variant="outline" class="mt-1 text-[10px]">{entry.status}</Badge>
+									<Badge variant="outline" class="mt-1.5 text-xs">{entry.status}</Badge>
 								</div>
 							{/each}
 						</div>
@@ -281,9 +392,9 @@
 			</div>
 		</div>
 		{#if reviewLegacyEntries.length > 0}
-			<div class="border-t px-4 py-3 text-sm">
-				<p class="mb-2 text-xs font-medium text-muted-foreground">Other (legacy divisions)</p>
-				<ul class="space-y-1 text-xs">
+			<div class="border-t px-5 py-4 text-base sm:px-6">
+				<p class="mb-2 text-sm font-medium text-muted-foreground">Other (legacy divisions)</p>
+				<ul class="space-y-1.5 text-sm">
 					{#each reviewLegacyEntries as entry (entry.id ?? entry.unitName)}
 						<li>{entry.division}: {formatUnitAssignmentLine(entry)} — {entry.status}</li>
 					{/each}
@@ -291,7 +402,7 @@
 			</div>
 		{/if}
 		{#if reviewBoardEntries.length === 0}
-			<p class="px-4 pb-4 text-center text-sm text-muted-foreground">No units were assigned</p>
+			<p class="px-5 pb-5 text-center text-base text-muted-foreground">No units were assigned</p>
 		{/if}
 	</div>
 </main>

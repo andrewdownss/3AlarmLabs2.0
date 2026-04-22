@@ -4,6 +4,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { organizationMembers, trainerScenarios } from '$lib/server/db/schema';
 import { getUtApi } from '$lib/server/utapi';
+import { isValidSelfPacedConfig, type SelfPacedConfig } from '$lib/self-paced';
 
 async function resolveOrgId(userId: string): Promise<string | null> {
 	const membership = await db.query.organizationMembers.findFirst({
@@ -56,10 +57,35 @@ export const actions: Actions = {
 			alarmLevel: String(form.get('alarmLevel') ?? '').trim() || null,
 			address: String(form.get('address') ?? '').trim() || null,
 			occupancyType: String(form.get('occupancyType') ?? '').trim() || null,
+			dispatchNotes: String(form.get('dispatchNotes') ?? '').trim() || null,
 			...(stageMetadataJson !== undefined ? { stageMetadataJson } : {})
 		}).where(scenarioAccessFilter(locals.user.id, organizationId, params.id));
 
 		return { success: true };
+	},
+	updateSelfPacedConfig: async ({ locals, params, request }) => {
+		if (!locals.user) throw redirect(303, '/login');
+		const organizationId = await resolveOrgId(locals.user.id);
+		const form = await request.formData();
+		const raw = String(form.get('selfPacedConfigJson') ?? '').trim();
+
+		let configValue: SelfPacedConfig | null;
+		if (!raw) {
+			configValue = null;
+		} else {
+			let parsed: unknown;
+			try { parsed = JSON.parse(raw); } catch { return fail(400, { selfPacedError: 'Invalid JSON.' }); }
+			if (!isValidSelfPacedConfig(parsed)) {
+				return fail(400, { selfPacedError: 'Config is missing required fields (timeline, expectedActions, assignmentCompletions, endConditions).' });
+			}
+			configValue = parsed;
+		}
+
+		await db.update(trainerScenarios)
+			.set({ selfPacedConfigJson: configValue })
+			.where(scenarioAccessFilter(locals.user.id, organizationId, params.id));
+
+		return { selfPacedSaved: true };
 	},
 	uploadSideImage: async ({ locals, params, request }) => {
 		if (!locals.user) throw redirect(303, '/login');
@@ -71,6 +97,13 @@ export const actions: Actions = {
 		const validSides = ['sideAlphaImageUrl', 'sideBravoImageUrl', 'sideCharlieImageUrl', 'sideDeltaImageUrl'];
 		if (!validSides.includes(side)) return fail(400, { error: 'Invalid side.' });
 		if (!file || file.size === 0) return fail(400, { error: 'No file provided.' });
+
+		const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+		if (file.size > MAX_UPLOAD_BYTES) {
+			return fail(413, {
+				error: `Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max 10 MB — try resizing or exporting at a lower quality.`
+			});
+		}
 
 		const utapi = getUtApi();
 		const uploadResult = await utapi.uploadFiles(file);

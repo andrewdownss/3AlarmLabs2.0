@@ -8,7 +8,7 @@ export async function transcribeAudio(buffer: Buffer, mimeType: string): Promise
 	const file = new File([new Uint8Array(buffer)], 'audio.webm', { type: mimeType });
 
 	const response = await openai.audio.transcriptions.create({
-		model: 'whisper-1',
+		model: 'gpt-4o-mini-transcribe',
 		file,
 		language: 'en'
 	});

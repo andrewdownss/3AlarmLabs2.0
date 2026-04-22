@@ -91,6 +91,17 @@
 		</div>
 	{/if}
 
+	{#if data.scenarios.length > 0}
+		<div class="mt-6 rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+			<strong class="font-semibold text-foreground">How the buttons work:</strong>
+			<span class="ml-1"><strong class="font-medium text-foreground">Edit</strong> — author the scenario (scene, resources, optional scripted timeline).</span>
+			<span class="ml-1"><strong class="font-medium text-foreground">Self Practice</strong> — run it solo. If you turned on <em>Self-Paced Script</em> in the editor, the timeline runs automatically; otherwise it's a free-form drill.</span>
+			{#if data.planConfig.canInstructorLedCommand}
+				<span class="ml-1"><strong class="font-medium text-foreground">Instructor-Led</strong> — generate a join code so a live instructor can drive the scenario.</span>
+			{/if}
+		</div>
+	{/if}
+
 	<div class="mt-8 space-y-4">
 		{#if data.scenarios.length === 0}
 			<div class="rounded-xl border border-dashed border-border p-12 text-center">

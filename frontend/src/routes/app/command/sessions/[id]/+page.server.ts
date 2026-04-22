@@ -3,6 +3,7 @@ import type { PageServerLoad } from './$types';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { trainerSessions, trainerScenarios, trainerCommandBoardEntries } from '$lib/server/db/schema';
+import { isValidSelfPacedConfig } from '$lib/self-paced';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -25,5 +26,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	]);
 	if (!scenario) throw redirect(303, '/app/command');
 
-	return { session, scenario, boardEntries };
+	const isSelfPaced = isValidSelfPacedConfig(scenario.selfPacedConfigJson);
+
+	return { session, scenario, boardEntries, isSelfPaced };
 };
