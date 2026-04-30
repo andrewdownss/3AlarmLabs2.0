@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -31,6 +31,11 @@
 	let newUnitName = $state('');
 	let isSaving = $state(false);
 	let saveSuccess = $state(false);
+	let autosaveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+	let autosaveMessage = $state<string | null>(null);
+	let detailsAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
+	let selfPacedAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
+	let hasHydratedSelfPacedAutosave = false;
 	let uploadingSideField = $state<string | null>(null);
 	let uploadError = $state<string | null>(null);
 	const MAX_SIDE_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -64,6 +69,13 @@
 	const initialSimpleSections = bucketSimpleScenario(initialSelfPacedConfig ?? emptyConfig());
 	const scenarioId = untrack(() => data.scenario.id);
 	const selfPacedModeStorageKey = `scenario-editor:${scenarioId}:self-paced-mode`;
+	let locallyKnownResourceNames = $state<string[]>(
+		untrack(() =>
+			(data.scenario.defaultResources ?? [])
+				.map((resource) => resource.unitName.trim())
+				.filter(Boolean)
+		)
+	);
 	let selfPacedAuthorMode = $state<SelfPacedAuthorMode>(
 		initialSimpleSections.unscheduled.length > 0 ? 'advanced' : 'simple'
 	);
@@ -88,6 +100,19 @@
 			return;
 		}
 		localStorage.setItem(selfPacedModeStorageKey, selfPacedAuthorMode);
+	});
+
+	$effect(() => {
+		JSON.stringify({
+			enabled: selfPacedEnabled,
+			config: cleanedSelfPacedConfig()
+		});
+		scheduleSelfPacedAutosave();
+	});
+
+	onDestroy(() => {
+		if (detailsAutosaveTimer) clearTimeout(detailsAutosaveTimer);
+		if (selfPacedAutosaveTimer) clearTimeout(selfPacedAutosaveTimer);
 	});
 
 	function uid(): string {
@@ -244,6 +269,7 @@
 
 	function handleOverlaysChange(event: CustomEvent<{ overlays: AnimationOverlay[] }>) {
 		overlayData[activeSide][activeStage] = event.detail.overlays;
+		scheduleDetailsAutosave();
 	}
 
 	function selectSide(sideKey: string) {
@@ -331,8 +357,66 @@
 		}
 	}
 
-	async function handleSave() {
-		isSaving = true;
+	function markAutosave(status: typeof autosaveStatus, message: string | null = null) {
+		autosaveStatus = status;
+		autosaveMessage = message;
+	}
+
+	function scheduleDetailsAutosave() {
+		if (!browser) return;
+		if (detailsAutosaveTimer) clearTimeout(detailsAutosaveTimer);
+		markAutosave('idle', 'Unsaved changes...');
+		detailsAutosaveTimer = setTimeout(() => {
+			void handleSave({ autosave: true });
+		}, 1500);
+	}
+
+	function scheduleSelfPacedAutosave() {
+		if (!browser) return;
+		if (!hasHydratedSelfPacedAutosave) {
+			hasHydratedSelfPacedAutosave = true;
+			return;
+		}
+		if (selfPacedAutosaveTimer) clearTimeout(selfPacedAutosaveTimer);
+		markAutosave('idle', 'Unsaved script changes...');
+		selfPacedAutosaveTimer = setTimeout(() => {
+			void saveSelfPaced({ autosave: true });
+		}, 1500);
+	}
+
+	function cleanedSelfPacedConfig(): SelfPacedConfig {
+		return {
+			timeLimitSeconds: selfPacedConfig.timeLimitSeconds || undefined,
+			timeline: selfPacedConfig.timeline.map((t) => ({
+				id: t.id,
+				offsetSeconds: Number(t.offsetSeconds) || 0,
+				label: t.label?.trim() || undefined,
+				dispatch: cleanDispatch(t.dispatch)
+			})),
+			expectedActions: selfPacedConfig.expectedActions.map((a) => ({
+				id: a.id,
+				label: a.label.trim(),
+				match: cleanMatch(a.match),
+				deadlineSeconds:
+					typeof a.deadlineSeconds === 'number' && a.deadlineSeconds > 0
+						? a.deadlineSeconds
+						: undefined,
+				critical: Boolean(a.critical)
+			})),
+			assignmentCompletions: selfPacedConfig.assignmentCompletions.map((r) => ({
+				id: r.id,
+				label: r.label?.trim() || undefined,
+				trigger: cleanMatch(r.trigger),
+				delaySeconds: Number(r.delaySeconds) || 0,
+				dispatch: cleanDispatch(r.dispatch)
+			})),
+			endConditions: { ...selfPacedConfig.endConditions }
+		};
+	}
+
+	async function handleSave(options: { autosave?: boolean } = {}) {
+		if (options.autosave) markAutosave('saving', 'Autosaving...');
+		else isSaving = true;
 		try {
 			const form = document.getElementById('details-form') as HTMLFormElement;
 			const fd = new FormData(form);
@@ -340,65 +424,53 @@
 			const result = await submitAction('update', fd);
 			if (result.type === 'failure') {
 				console.error('[update]', result.data);
+				if (options.autosave) markAutosave('error', 'Autosave failed.');
 				return;
 			}
-			saveSuccess = true;
-			setTimeout(() => (saveSuccess = false), 2000);
-			await invalidateAll();
+			if (options.autosave) {
+				markAutosave('saved', 'Autosaved.');
+			} else {
+				saveSuccess = true;
+				setTimeout(() => (saveSuccess = false), 2000);
+				await invalidateAll();
+			}
 		} finally {
-			isSaving = false;
+			if (!options.autosave) isSaving = false;
 		}
 	}
 
-	async function saveSelfPaced() {
-		isSavingSelfPaced = true;
-		selfPacedSaveMsg = null;
+	async function saveSelfPaced(options: { autosave?: boolean } = {}) {
+		if (options.autosave) markAutosave('saving', 'Autosaving script...');
+		else {
+			isSavingSelfPaced = true;
+			selfPacedSaveMsg = null;
+		}
 		try {
 			const fd = new FormData();
 			if (selfPacedEnabled) {
 				await ensureArrivalResources();
-				const cleaned: SelfPacedConfig = {
-					timeLimitSeconds: selfPacedConfig.timeLimitSeconds || undefined,
-					timeline: selfPacedConfig.timeline.map((t) => ({
-						id: t.id,
-						offsetSeconds: Number(t.offsetSeconds) || 0,
-						label: t.label?.trim() || undefined,
-						dispatch: cleanDispatch(t.dispatch)
-					})),
-					expectedActions: selfPacedConfig.expectedActions.map((a) => ({
-						id: a.id,
-						label: a.label.trim(),
-						match: cleanMatch(a.match),
-						deadlineSeconds:
-							typeof a.deadlineSeconds === 'number' && a.deadlineSeconds > 0
-								? a.deadlineSeconds
-								: undefined,
-						critical: Boolean(a.critical)
-					})),
-					assignmentCompletions: selfPacedConfig.assignmentCompletions.map((r) => ({
-						id: r.id,
-						label: r.label?.trim() || undefined,
-						trigger: cleanMatch(r.trigger),
-						delaySeconds: Number(r.delaySeconds) || 0,
-						dispatch: cleanDispatch(r.dispatch)
-					})),
-					endConditions: { ...selfPacedConfig.endConditions }
-				};
-				fd.set('selfPacedConfigJson', JSON.stringify(cleaned));
+				fd.set('selfPacedConfigJson', JSON.stringify(cleanedSelfPacedConfig()));
 			} else {
 				fd.set('selfPacedConfigJson', '');
 			}
 			const result = await submitAction('updateSelfPacedConfig', fd);
 			if (result.type === 'failure') {
 				const err = (result.data as { selfPacedError?: string } | undefined)?.selfPacedError;
-				selfPacedSaveMsg = err ?? 'Could not save self-paced config.';
+				if (options.autosave) markAutosave('error', err ?? 'Autosave failed.');
+				else selfPacedSaveMsg = err ?? 'Could not save self-paced config.';
 				return;
 			}
-			selfPacedSaveMsg = 'Saved.';
-			await invalidateAll();
+			if (options.autosave) {
+				markAutosave('saved', 'Script autosaved.');
+			} else {
+				selfPacedSaveMsg = 'Saved.';
+				await invalidateAll();
+			}
 		} finally {
-			isSavingSelfPaced = false;
-			setTimeout(() => (selfPacedSaveMsg = null), 3000);
+			if (!options.autosave) {
+				isSavingSelfPaced = false;
+				setTimeout(() => (selfPacedSaveMsg = null), 3000);
+			}
 		}
 	}
 
@@ -433,20 +505,24 @@
 	async function addResource() {
 		const added = await addResourceName(newUnitName);
 		if (!added) return;
+		if (!locallyKnownResourceNames.includes(newUnitName.trim())) {
+			locallyKnownResourceNames = [...locallyKnownResourceNames, newUnitName.trim()];
+		}
 		newUnitName = '';
 		await invalidateAll();
 	}
 
 	async function ensureArrivalResources() {
-		const existing = (data.scenario.defaultResources ?? [])
-			.map((resource) => resource.unitName.trim())
-			.filter(Boolean);
+		const existing = [...locallyKnownResourceNames];
 		const arrivals = getArrivalUnitNames(selfPacedConfig).filter(
 			(unitName) => !existing.includes(unitName)
 		);
 		for (const unitName of arrivals) {
 			const added = await addResourceName(unitName);
-			if (added) existing.push(unitName);
+			if (added) {
+				existing.push(unitName);
+				locallyKnownResourceNames = [...existing];
+			}
 		}
 	}
 
@@ -458,6 +534,7 @@
 			console.error('[removeResource]', result.data);
 			return;
 		}
+		locallyKnownResourceNames = locallyKnownResourceNames.filter((name) => name !== unitName);
 		await invalidateAll();
 	}
 
@@ -472,9 +549,18 @@
 			<h1 class="text-3xl font-semibold tracking-tight">Edit Scenario</h1>
 			<p class="mt-1 text-sm text-muted-foreground">{data.scenario.title}</p>
 		</div>
-		<div class="flex gap-2">
+		<div class="flex items-center gap-2">
+			{#if autosaveMessage}
+				<span
+					class="hidden text-xs sm:inline {autosaveStatus === 'error'
+						? 'text-destructive'
+						: 'text-muted-foreground'}"
+				>
+					{autosaveMessage}
+				</span>
+			{/if}
 			<Button variant="outline" href="/app/command">Back</Button>
-			<Button onclick={handleSave} disabled={isSaving}>
+			<Button onclick={() => handleSave()} disabled={isSaving}>
 				{#if isSaving}
 					<Spinner class="mr-2 h-4 w-4" />
 					Saving…
@@ -523,7 +609,12 @@
 		<Card.Root>
 			<Card.Header><Card.Title>Details</Card.Title></Card.Header>
 			<Card.Content>
-				<form id="details-form" class="space-y-4">
+				<form
+					id="details-form"
+					class="space-y-4"
+					oninput={scheduleDetailsAutosave}
+					onchange={scheduleDetailsAutosave}
+				>
 					<div class="space-y-1.5">
 						<label class="text-sm font-medium" for="title">Title</label>
 						<Input id="title" name="title" value={data.scenario.title} required />
@@ -1873,7 +1964,7 @@
 					{#if selfPacedSaveMsg}
 						<span class="text-xs text-muted-foreground">{selfPacedSaveMsg}</span>
 					{/if}
-					<Button type="button" onclick={saveSelfPaced} disabled={isSavingSelfPaced}>
+					<Button type="button" onclick={() => saveSelfPaced()} disabled={isSavingSelfPaced}>
 						{#if isSavingSelfPaced}<Spinner class="mr-2 h-4 w-4" />Saving…{:else}Save script{/if}
 					</Button>
 				</div>

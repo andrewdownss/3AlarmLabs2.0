@@ -191,7 +191,10 @@ export const actions: Actions = {
 			return fail(403, { error: 'Only admins can edit library scenarios.' });
 		}
 
-		const resources = [...(scenario.defaultResources ?? []), { unitName, status: 'available' }];
+		const existingResources = scenario.defaultResources ?? [];
+		const resources = existingResources.some((resource) => resource.unitName === unitName)
+			? existingResources
+			: [...existingResources, { unitName, status: 'available' }];
 		await db
 			.update(trainerScenarios)
 			.set({ defaultResources: resources })

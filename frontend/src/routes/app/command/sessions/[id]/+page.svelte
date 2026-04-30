@@ -6,10 +6,12 @@
 	import { Button } from '$lib/components/ui/button';
 	import { getTrainerSocket } from '$lib/stores/socket';
 	import OverlayCanvas from '$lib/components/scene-editor/konva-overlay-editor/OverlayCanvas.svelte';
+	import { preloadImages } from '$lib/components/scene-editor/konva-overlay-editor/image-preload';
 	import {
 		normalizeAnimationOverlays,
 		type PersistedAnimationOverlay
 	} from '$lib/components/scene-editor/konva-overlay-editor/overlay-utils';
+	import { preloadSpritesheetPacks } from '$lib/components/scene-editor/konva-overlay-editor/spritesheet-cache';
 	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
 	import type { PageData } from './$types';
 	import {
@@ -227,7 +229,29 @@
 	);
 	const hasOverlays = $derived(currentOverlays.length > 0);
 
-	const overlayKey = $derived(`${currentSide}-${currentStage}`);
+	function sideImageUrls(): string[] {
+		return Object.values(sideImageMap).filter((url): url is string => Boolean(url));
+	}
+
+	function allOverlayPackIds(): string[] {
+		const packIds: string[] = [];
+		for (const side of Object.values(stageMetadata)) {
+			for (const stage of Object.values(side ?? {})) {
+				for (const overlay of normalizeAnimationOverlays(parsePersistedOverlays(stage))) {
+					if (!packIds.includes(overlay.packId)) packIds.push(overlay.packId);
+				}
+			}
+		}
+		return packIds;
+	}
+
+	async function warmScenarioMedia() {
+		if (!browser) return;
+		await Promise.allSettled([
+			preloadImages(sideImageUrls()),
+			preloadSpritesheetPacks(allOverlayPackIds())
+		]);
+	}
 
 	function formatClock(seconds: number) {
 		const m = Math.floor(seconds / 60)
@@ -578,6 +602,7 @@
 		clockInterval = setInterval(() => {
 			if (hasStarted && !isPaused) sessionSeconds++;
 		}, 1000);
+		void warmScenarioMedia();
 
 		if (isSelfPaced) {
 			tickInterval = setInterval(() => {
@@ -776,7 +801,7 @@
 									How this runs
 								</p>
 								<ul class="mt-1.5 space-y-1 text-sm text-foreground">
-									{#each selfPacedRunHints as hint}
+									{#each selfPacedRunHints as hint (hint)}
 										<li class="flex gap-2">
 											<span class="text-muted-foreground" aria-hidden="true">•</span><span
 												>{hint}</span
@@ -815,16 +840,14 @@
 						class="relative h-[min(36vh,340px)] w-full max-w-xl overflow-hidden rounded-lg bg-black shadow-sm ring-1 ring-border/60 sm:h-[min(38vh,380px)] sm:max-w-2xl md:max-w-3xl"
 					>
 						{#if currentSideImage && hasOverlays}
-							{#key overlayKey}
-								<div class="absolute inset-0">
-									<OverlayCanvas
-										baseImageUrl={currentSideImage}
-										overlays={currentOverlays}
-										selectedOverlayId={null}
-										isInteractive={false}
-									/>
-								</div>
-							{/key}
+							<div class="absolute inset-0">
+								<OverlayCanvas
+									baseImageUrl={currentSideImage}
+									overlays={currentOverlays}
+									selectedOverlayId={null}
+									isInteractive={false}
+								/>
+							</div>
 						{:else if currentSideImage}
 							<img
 								src={currentSideImage}
