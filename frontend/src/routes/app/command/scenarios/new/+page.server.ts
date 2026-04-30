@@ -38,11 +38,17 @@ export const actions: Actions = {
 			.where(
 				organizationId
 					? eq(trainerScenarios.organizationId, organizationId)
-					: and(eq(trainerScenarios.createdBy, locals.user.id), isNull(trainerScenarios.organizationId))
+					: and(
+							eq(trainerScenarios.createdBy, locals.user.id),
+							isNull(trainerScenarios.organizationId),
+							eq(trainerScenarios.isLibrary, false)
+						)
 			);
 		const scenarioCount = scenarioCountResult[0]?.value ?? 0;
 		if (!canCreateCommandScenario(planConfig, scenarioCount)) {
-			return fail(403, { formError: `You've reached the active scenario limit for the ${planConfig.name} plan.` });
+			return fail(403, {
+				formError: `You've reached the active scenario limit for the ${planConfig.name} plan.`
+			});
 		}
 
 		await db.insert(trainerScenarios).values({

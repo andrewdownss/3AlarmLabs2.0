@@ -19,7 +19,9 @@
 			fd.set('scenarioId', id);
 			await fetch('?/deleteScenario', { method: 'POST', body: fd, credentials: 'same-origin' });
 			await invalidate('command:scenarios');
-		} finally { deletingId = null; }
+		} finally {
+			deletingId = null;
+		}
 	}
 
 	async function handleStartSession(scenarioId: string, mode: 'self_practice' | 'instructor_led') {
@@ -29,9 +31,18 @@
 		fd.set('scenarioId', scenarioId);
 		fd.set('mode', mode);
 		try {
-			const resp = await fetch('?/startSession', { method: 'POST', body: fd, credentials: 'same-origin' });
+			const resp = await fetch('?/startSession', {
+				method: 'POST',
+				body: fd,
+				credentials: 'same-origin'
+			});
 			const result = deserialize(await resp.text());
-			if (result.type === 'success' && result.data && typeof result.data === 'object' && 'sessionId' in result.data) {
+			if (
+				result.type === 'success' &&
+				result.data &&
+				typeof result.data === 'object' &&
+				'sessionId' in result.data
+			) {
 				const sessionId = String((result.data as { sessionId: string }).sessionId);
 				if (mode === 'instructor_led') {
 					window.location.href = `/app/command/sessions/${sessionId}/instruct`;
@@ -51,8 +62,14 @@
 	}
 
 	function formatDate(date: Date | string) {
-		return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		return new Date(date).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
 	}
+
+	const hasLibrary = $derived(data.librarySummary.totalCount > 0);
 </script>
 
 <svelte:head>
@@ -63,21 +80,31 @@
 	/>
 </svelte:head>
 
-<main class="mx-auto w-full max-w-5xl px-4 py-6 pb-safe sm:py-10">
+<main class="pb-safe mx-auto w-full max-w-5xl px-4 py-6 sm:py-10">
 	<div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
 		<div class="min-w-0">
 			<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Command</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Build and run firefighter command simulations.</p>
+			<p class="mt-1 text-sm text-muted-foreground">
+				Build and run firefighter command simulations.
+			</p>
 		</div>
 		<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/command/reviews">Past simulations</Button>
-			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/join-organization">Join department</Button>
-			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/command/join">Join session</Button>
+			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/command/reviews"
+				>Past simulations</Button
+			>
+			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/join-organization"
+				>Join department</Button
+			>
+			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href="/app/command/join"
+				>Join session</Button
+			>
 			<Button
 				class="col-span-2 min-h-11 w-full sm:col-span-1 sm:w-auto"
 				variant={data.canCreateScenario ? 'default' : 'outline'}
 				disabled={!data.canCreateScenario}
-				href={data.canCreateScenario ? '/app/command/scenarios/new' : resolve('/app/settings/billing')}
+				href={data.canCreateScenario
+					? '/app/command/scenarios/new'
+					: resolve('/app/settings/billing')}
 			>
 				+ New Scenario
 			</Button>
@@ -85,33 +112,100 @@
 	</div>
 
 	{#if !data.canCreateScenario}
-		<div class="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+		<div
+			class="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+		>
 			You’ve reached the active scenario limit for the <strong>{data.planConfig.name}</strong> plan.
 			<a href={resolve('/app/settings/billing')} class="font-medium underline">Upgrade</a> to create more.
 		</div>
 	{/if}
 
-	{#if data.scenarios.length > 0}
-		<div class="mt-6 rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+	{#if data.scenarios.length > 0 || hasLibrary}
+		<div
+			class="mt-6 rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:text-sm"
+		>
 			<strong class="font-semibold text-foreground">How the buttons work:</strong>
-			<span class="ml-1"><strong class="font-medium text-foreground">Edit</strong> — author the scenario (scene, resources, optional scripted timeline).</span>
-			<span class="ml-1"><strong class="font-medium text-foreground">Self Practice</strong> — run it solo. If you turned on <em>Self-Paced Script</em> in the editor, the timeline runs automatically; otherwise it's a free-form drill.</span>
+			<span class="ml-1"
+				><strong class="font-medium text-foreground">Edit</strong> — author the scenario (scene, resources,
+				optional scripted timeline).</span
+			>
+			<span class="ml-1"
+				><strong class="font-medium text-foreground">Self Practice</strong> — run it solo. If you
+				turned on <em>Self-Paced Script</em> in the editor, the timeline runs automatically; otherwise
+				it's a free-form drill.</span
+			>
 			{#if data.planConfig.canInstructorLedCommand}
-				<span class="ml-1"><strong class="font-medium text-foreground">Instructor-Led</strong> — generate a join code so a live instructor can drive the scenario.</span>
+				<span class="ml-1"
+					><strong class="font-medium text-foreground">Instructor-Led</strong> — generate a join code
+					so a live instructor can drive the scenario.</span
+				>
 			{/if}
 		</div>
 	{/if}
 
 	<div class="mt-8 space-y-4">
+		{#if data.planConfig.canAccessLibrary}
+			<a
+				href={resolve('/app/command/library')}
+				class="group block overflow-hidden rounded-xl border bg-card shadow-sm transition hover:border-primary/50 hover:shadow-md"
+			>
+				<div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+					<div class="flex min-w-0 items-start gap-4">
+						<div
+							class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground"
+						>
+							3A
+						</div>
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2">
+								<h2 class="text-lg font-semibold tracking-tight">3AlarmLabs Library</h2>
+								<Badge variant="secondary">BY 3ALARMLABS</Badge>
+								{#if data.librarySummary.newThisWeekCount > 0}
+									<Badge variant="outline"
+										>{data.librarySummary.newThisWeekCount} new this week</Badge
+									>
+								{/if}
+							</div>
+							<p class="mt-1 text-sm text-muted-foreground">
+								Open premade self-paced simulations from 3AlarmLabs. Run them as many times as you
+								want.
+							</p>
+							<p class="mt-2 text-xs text-muted-foreground">
+								{data.librarySummary.totalCount}
+								{data.librarySummary.totalCount === 1 ? 'simulation' : 'simulations'}
+								{#if data.librarySummary.latestPublishedAt}
+									· Latest update {formatDate(data.librarySummary.latestPublishedAt)}
+								{/if}
+							</p>
+						</div>
+					</div>
+					<div class="shrink-0 text-sm font-medium text-primary group-hover:underline">
+						View library →
+					</div>
+				</div>
+			</a>
+		{/if}
+
 		{#if data.scenarios.length === 0}
 			<div class="rounded-xl border border-dashed border-border p-12 text-center">
 				<p class="text-lg font-medium text-muted-foreground">No scenarios yet</p>
-				<p class="mt-1 text-sm text-muted-foreground">Create your first command training scenario to get started.</p>
+				<p class="mt-1 text-sm text-muted-foreground">
+					Create your first command training scenario to get started.
+				</p>
 				<Button class="mt-4" href="/app/command/scenarios/new">Create Scenario</Button>
 			</div>
 		{:else}
+			{#if data.scenarios.length > 0}
+				<div>
+					<h2 class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+						Your scenarios
+					</h2>
+				</div>
+			{/if}
 			{#each data.scenarios as scenario, index (scenario.id)}
-				<div class="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-center">
+				<div
+					class="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-center"
+				>
 					<div class="h-40 w-full shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-32">
 						{#if scenario.sideAlphaImageUrl}
 							<img
@@ -126,7 +220,11 @@
 								fetchpriority={index === 0 ? 'high' : undefined}
 							/>
 						{:else}
-							<div class="flex h-full w-full items-center justify-center text-2xl text-muted-foreground">🏠</div>
+							<div
+								class="flex h-full w-full items-center justify-center text-2xl text-muted-foreground"
+							>
+								🏠
+							</div>
 						{/if}
 					</div>
 					<div class="min-w-0 flex-1">
@@ -176,14 +274,38 @@
 								variant="outline"
 								href={resolve('/app/settings/billing')}
 								title="Upgrade to Team or Instructor for instructor-led sessions"
-								>Upgrade for Instructor-Led</Button>
+								>Upgrade for Instructor-Led</Button
+							>
 						{/if}
-						<Button class="min-h-11 w-full sm:w-auto" size="sm" variant="outline" href={`/app/command/scenarios/${scenario.id}`}>Edit</Button>
-						<button type="button" onclick={() => handleDelete(scenario.id)} disabled={deletingId === scenario.id} class="inline-flex h-11 w-11 items-center justify-center justify-self-end rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 sm:h-8 sm:w-8" aria-label="Delete">
+						<Button
+							class="min-h-11 w-full sm:w-auto"
+							size="sm"
+							variant="outline"
+							href={`/app/command/scenarios/${scenario.id}`}>Edit</Button
+						>
+						<button
+							type="button"
+							onclick={() => handleDelete(scenario.id)}
+							disabled={deletingId === scenario.id}
+							class="inline-flex h-11 w-11 items-center justify-center justify-self-end rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 sm:h-8 sm:w-8"
+							aria-label="Delete"
+						>
 							{#if deletingId === scenario.id}
 								<Spinner class="h-4 w-4" />
 							{:else}
-								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path
+										d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"
+									/></svg
+								>
 							{/if}
 						</button>
 					</div>

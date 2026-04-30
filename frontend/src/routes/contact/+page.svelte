@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { PLANS } from '$lib/plans';
 
-	const monthlyPrice = PLANS.individual.monthlyPrice ?? 29;
+	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
 
 	const supportMail =
 		'mailto:support@3alarmlabs.com?subject=' + encodeURIComponent('Support — 3 Alarm Labs');
@@ -22,7 +22,10 @@
 	<link rel="canonical" href="https://3alarmlabs.com/contact" />
 	<meta property="og:type" content="website" />
 	<meta property="og:title" content="Contact — 3 Alarm Labs" />
-	<meta property="og:description" content="Sales, support, and privacy contact info for 3 Alarm Labs." />
+	<meta
+		property="og:description"
+		content="Sales, support, and privacy contact info for 3 Alarm Labs."
+	/>
 	<meta property="og:url" content="https://3alarmlabs.com/contact" />
 	<meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
@@ -34,13 +37,15 @@
 		<main class="py-12 sm:py-16">
 			<div class="mx-auto max-w-3xl">
 				<header>
-					<p class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Contact</p>
+					<p class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+						Contact
+					</p>
 					<h1 class="mt-4 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
 						Get in touch.
 					</h1>
 					<p class="mt-5 text-base leading-7 text-muted-foreground sm:text-lg">
-						We're based in the United States and support firefighters, departments, academies, and training companies.
-						Pick the inbox that matches your question.
+						We're based in the United States and support firefighters, departments, academies, and
+						training companies. Pick the inbox that matches your question.
 					</p>
 				</header>
 
@@ -50,7 +55,10 @@
 						<p class="mt-2 text-sm leading-6 text-muted-foreground">
 							Account help, billing questions, bug reports, and how-to questions.
 						</p>
-						<a class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline" href={supportMail}>
+						<a
+							class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline"
+							href={supportMail}
+						>
 							support@3alarmlabs.com
 						</a>
 					</article>
@@ -60,7 +68,10 @@
 						<p class="mt-2 text-sm leading-6 text-muted-foreground">
 							Department pricing, demos, pilot programs, and training-company licensing.
 						</p>
-						<a class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline" href={salesMail}>
+						<a
+							class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline"
+							href={salesMail}
+						>
 							sales@3alarmlabs.com
 						</a>
 					</article>
@@ -70,7 +81,10 @@
 						<p class="mt-2 text-sm leading-6 text-muted-foreground">
 							Privacy questions, data-processing requests, and recording-policy questions.
 						</p>
-						<a class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline" href={privacyMail}>
+						<a
+							class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline"
+							href={privacyMail}
+						>
 							privacy@3alarmlabs.com
 						</a>
 					</article>
@@ -87,8 +101,8 @@
 				<section class="mt-10 rounded-none border border-border bg-muted/30 p-6 shadow-sm">
 					<h2 class="text-xl font-semibold tracking-tight text-foreground">Response times</h2>
 					<p class="mt-2 text-sm leading-6 text-muted-foreground">
-						We reply to support emails within one business day. Sales inquiries usually get a same-day response
-						during business hours.
+						We reply to support emails within one business day. Sales inquiries usually get a
+						same-day response during business hours.
 					</p>
 				</section>
 			</div>

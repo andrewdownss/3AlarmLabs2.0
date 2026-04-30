@@ -54,7 +54,7 @@ export const actions: Actions = {
 				id: orgId,
 				name,
 				ownerId: user.id,
-				planId: 'free',
+				planId: 'expired',
 				joinCode
 			});
 

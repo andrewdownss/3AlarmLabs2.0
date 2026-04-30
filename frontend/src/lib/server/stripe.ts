@@ -17,7 +17,10 @@ function readEnvStripePrice(planId: PlanId, interval: BillingInterval): string |
 	return raw?.trim() || undefined;
 }
 
-function readLegacyEnvStripePrice(legacyPlanId: 'TEAM' | 'INSTRUCTOR' | 'ENTERPRISE', interval: BillingInterval) {
+function readLegacyEnvStripePrice(
+	legacyPlanId: 'TEAM' | 'INSTRUCTOR' | 'ENTERPRISE',
+	interval: BillingInterval
+) {
 	const suffix = interval === 'month' ? 'MONTHLY' : 'ANNUAL';
 	const key = `STRIPE_PRICE_${legacyPlanId}_${suffix}`;
 	const raw = (env as Record<string, string | undefined>)[key];
@@ -43,7 +46,10 @@ export async function createCheckoutSession(opts: {
 }): Promise<Stripe.Checkout.Session> {
 	const stripe = getStripe();
 	const priceId = getStripePriceIdForPlan(opts.planId, opts.billingInterval);
-	if (!priceId) throw new Error(`No Stripe price configured for plan: ${opts.planId} (${opts.billingInterval})`);
+	if (!priceId)
+		throw new Error(
+			`No Stripe price configured for plan: ${opts.planId} (${opts.billingInterval})`
+		);
 
 	const params: Stripe.Checkout.SessionCreateParams = {
 		mode: 'subscription',
@@ -55,6 +61,13 @@ export async function createCheckoutSession(opts: {
 			metadata: { organizationId: opts.organizationId, planId: opts.planId }
 		}
 	};
+
+	if (opts.planId === 'individual') {
+		params.subscription_data = {
+			...params.subscription_data,
+			trial_period_days: 7
+		};
+	}
 
 	if (opts.stripeCustomerId) {
 		params.customer = opts.stripeCustomerId;

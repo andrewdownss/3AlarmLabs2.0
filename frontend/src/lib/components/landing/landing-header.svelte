@@ -7,29 +7,31 @@
 	}
 
 	let { monthlyPrice }: Props = $props();
+	const individualSignupHref = '/signup?next=%2Fapp%2Fstart-individual';
 </script>
 
 <header class="flex items-center justify-between py-6">
-	<a href={resolve('/')} class="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
-		<span class="h-2 w-2 shrink-0 rounded-full bg-[#E85D20]" style="animation: pulse-dot 2s infinite"></span>
+	<a
+		href={resolve('/')}
+		class="flex items-center gap-1.5 text-sm font-semibold tracking-[0.18em] text-foreground uppercase"
+	>
+		<span
+			class="h-2 w-2 shrink-0 rounded-full bg-[#E85D20]"
+			style="animation: pulse-dot 2s infinite"
+		></span>
 		3AlarmLabs
 	</a>
 
 	<div class="flex items-center gap-2 sm:gap-3">
-		<Button
-			variant="outline"
-			size="sm"
-			class="rounded-none"
-			href={resolve('/pricing')}
-		>
+		<Button variant="outline" size="sm" class="rounded-none" href={resolve('/pricing')}>
 			Pricing
 		</Button>
 		<Button
 			size="sm"
 			class="rounded-none bg-[#E85D20] px-4 text-white hover:bg-[#D4501A]"
-			href={resolve('/signup')}
+			href={individualSignupHref}
 		>
-			Start for ${monthlyPrice}/month
+			Start trial
 		</Button>
 	</div>
 </header>

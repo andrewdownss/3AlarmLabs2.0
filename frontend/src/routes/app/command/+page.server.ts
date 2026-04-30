@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { and, eq, desc, isNull } from 'drizzle-orm';
+import { and, eq, desc, isNull, lte, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	organizationMembers,
@@ -10,7 +10,12 @@ import {
 	trainerSessionEvents
 } from '$lib/server/db/schema';
 import { generateJoinCode } from '$lib/server/join-code';
-import { canCreateCommandScenario, canStartCommandMode, getPlanConfig, normalizePlanId } from '$lib/plans';
+import {
+	canCreateCommandScenario,
+	canStartCommandMode,
+	getPlanConfig,
+	normalizePlanId
+} from '$lib/plans';
 
 export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -27,10 +32,14 @@ export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 
 	const scenarios = await db.query.trainerScenarios.findMany({
 		where: organizationId
-			? eq(trainerScenarios.organizationId, organizationId)
+			? and(
+					eq(trainerScenarios.organizationId, organizationId),
+					eq(trainerScenarios.isLibrary, false)
+				)
 			: and(
 					eq(trainerScenarios.createdBy, locals.user.id),
-					isNull(trainerScenarios.organizationId)
+					isNull(trainerScenarios.organizationId),
+					eq(trainerScenarios.isLibrary, false)
 				),
 		orderBy: [desc(trainerScenarios.updatedAt)],
 		columns: {
@@ -44,8 +53,35 @@ export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 		}
 	});
 
+	const now = new Date();
+	const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+	const libraryRows = planConfig.canAccessLibrary
+		? await db.query.trainerScenarios.findMany({
+				where: and(eq(trainerScenarios.isLibrary, true), lte(trainerScenarios.publishedAt, now)),
+				columns: { id: true, publishedAt: true }
+			})
+		: [];
+	const publishedDates = libraryRows
+		.map((row) => row.publishedAt)
+		.filter((date): date is Date => Boolean(date));
+	const latestPublishedAt =
+		publishedDates.length > 0
+			? new Date(Math.max(...publishedDates.map((date) => date.getTime())))
+			: null;
+	const librarySummary = {
+		totalCount: libraryRows.length,
+		newThisWeekCount: publishedDates.filter((date) => date >= weekAgo).length,
+		latestPublishedAt
+	};
+
 	const scenarioCount = scenarios.length;
-	return { scenarios, scenarioCount, canCreateScenario: canCreateCommandScenario(planConfig, scenarioCount), planConfig };
+	return {
+		scenarios,
+		librarySummary,
+		scenarioCount,
+		canCreateScenario: canCreateCommandScenario(planConfig, scenarioCount),
+		planConfig
+	};
 };
 
 export const actions: Actions = {
@@ -71,9 +107,12 @@ export const actions: Actions = {
 							isNull(trainerScenarios.organizationId)
 						)
 			),
-			columns: { id: true }
+			columns: { id: true, isLibrary: true }
 		});
 		if (!scenario) return fail(404, { error: 'Scenario not found.' });
+		if (scenario.isLibrary && !locals.user.isAdmin) {
+			return fail(403, { error: 'Library scenarios can only be managed by admins.' });
+		}
 
 		await db.delete(trainerScenarios).where(eq(trainerScenarios.id, scenarioId));
 		return { deleted: true };
@@ -91,23 +130,31 @@ export const actions: Actions = {
 		});
 		const userOrganizationId = membership?.organizationId ?? null;
 
+		const now = new Date();
 		const scenario = await db.query.trainerScenarios.findFirst({
 			where: and(
 				eq(trainerScenarios.id, scenarioId),
-				userOrganizationId
-					? eq(trainerScenarios.organizationId, userOrganizationId)
-					: and(
-							eq(trainerScenarios.createdBy, locals.user.id),
-							isNull(trainerScenarios.organizationId)
-						)
+				or(
+					userOrganizationId
+						? eq(trainerScenarios.organizationId, userOrganizationId)
+						: and(
+								eq(trainerScenarios.createdBy, locals.user.id),
+								isNull(trainerScenarios.organizationId),
+								eq(trainerScenarios.isLibrary, false)
+							),
+					and(eq(trainerScenarios.isLibrary, true), lte(trainerScenarios.publishedAt, now))
+				)
 			),
-			columns: { id: true }
+			columns: { id: true, isLibrary: true }
 		});
 		if (!scenario) return fail(404, { error: 'Scenario not found.' });
+		if (scenario.isLibrary && mode !== 'self_practice') {
+			return fail(403, { error: 'Library scenarios are available for self practice only.' });
+		}
 
 		const sessionId = crypto.randomUUID();
 		let joinCode: string | null = null;
-		let organizationId: string | null = null;
+		let organizationId: string | null = userOrganizationId;
 
 		if (mode === 'instructor_led') {
 			if (!userOrganizationId) {
@@ -124,7 +171,6 @@ export const actions: Actions = {
 						'Instructor-led sessions are not included on your plan. Upgrade to Team or Instructor to unlock them.'
 				});
 			}
-			organizationId = userOrganizationId;
 
 			for (let attempt = 0; attempt < 5; attempt += 1) {
 				const candidate = generateJoinCode();

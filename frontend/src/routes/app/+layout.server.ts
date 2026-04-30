@@ -10,7 +10,12 @@ function layoutCacheKey(userId: string) {
 	return `app:layout:${userId}`;
 }
 
-const ORG_SETUP_PATHS = new Set(['/app/settings/organization', '/app/join-organization']);
+const ORG_SETUP_PATHS = new Set([
+	'/app/settings/organization',
+	'/app/join-organization',
+	'/app/start-individual'
+]);
+const BILLING_WALL_PATHS = new Set(['/app/settings/billing', '/app/start-individual']);
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
@@ -31,13 +36,25 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 
 	const cacheKey = layoutCacheKey(locals.user.id);
 	const cached = get<Awaited<ReturnType<typeof loadLayoutData>>>(cacheKey);
-	if (cached) return cached;
+	if (cached) {
+		if (
+			cached.organization &&
+			cached.planConfig.id === 'expired' &&
+			!BILLING_WALL_PATHS.has(path)
+		) {
+			throw redirect(303, '/app/settings/billing');
+		}
+		return cached;
+	}
 
 	const result = await loadLayoutData(
 		locals.user,
 		locals.session,
 		membershipRow ? { organizationId: membershipRow.organizationId } : undefined
 	);
+	if (result.organization && result.planConfig.id === 'expired' && !BILLING_WALL_PATHS.has(path)) {
+		throw redirect(303, '/app/settings/billing');
+	}
 	set(cacheKey, result);
 	return result;
 };
@@ -60,7 +77,10 @@ async function loadLayoutData(
 	if (org) {
 		const [sceneResult, memberResult] = await Promise.all([
 			db.select({ value: count() }).from(scenes).where(eq(scenes.organizationId, org.id)),
-			db.select({ value: count() }).from(organizationMembers).where(eq(organizationMembers.organizationId, org.id))
+			db
+				.select({ value: count() })
+				.from(organizationMembers)
+				.where(eq(organizationMembers.organizationId, org.id))
 		]);
 		sceneCount = sceneResult[0]?.value ?? 0;
 		memberCount = memberResult[0]?.value ?? 1;
@@ -68,7 +88,7 @@ async function loadLayoutData(
 
 	const isActiveOrgOwner = org ? org.ownerId === user.id : false;
 
-	const canManageTeam = isActiveOrgOwner;
+	const canManageTeam = isActiveOrgOwner && !org?.isPersonal;
 
 	return {
 		user,

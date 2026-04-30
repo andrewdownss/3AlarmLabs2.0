@@ -62,7 +62,7 @@
 		</form>
 		<div class="mt-4 text-center text-sm text-muted-foreground">
 			Don't have an account?
-			<a href="/signup" class="font-medium text-foreground hover:underline">Sign up free</a>
+			<a href="/signup" class="font-medium text-foreground hover:underline">Sign up</a>
 		</div>
 		<div class="mt-2 text-center text-sm text-muted-foreground">
 			<a href="/forgot-password" class="hover:underline">Forgot password?</a>

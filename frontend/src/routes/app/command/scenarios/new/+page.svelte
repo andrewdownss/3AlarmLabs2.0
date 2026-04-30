@@ -4,7 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { page } from '$app/state';
 
-	const actionData = $derived.by(() => page.form as any);
+	const actionData = $derived.by(() => page.form as { formError?: string; fieldErrors?: Record<string, string[]> } | null);
 </script>
 
 <div class="mx-auto w-full max-w-2xl px-4 py-6 pb-safe sm:py-10">

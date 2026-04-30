@@ -8,7 +8,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	const pageMeta = getMarketingPageMeta(slug);
 	if (!pageMeta) throw error(404);
 
-	const monthlyPrice = PLANS.individual.monthlyPrice ?? 29;
+	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
 
 	return {
 		canonicalUrl: url.origin + url.pathname,
@@ -22,4 +22,3 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		keywords: pageMeta.keywords
 	};
 };
-

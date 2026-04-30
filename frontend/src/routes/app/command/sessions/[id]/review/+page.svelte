@@ -35,8 +35,18 @@
 
 	const reviewCaps = $derived(reviewCapsFromData(data));
 
-	const stageLabels: Record<string, string> = { incipient: 'Incipient', growth: 'Growth', fully_developed: 'Fully Developed', decay: 'Decay' };
-	const stageBadgeClass: Record<string, string> = { incipient: 'bg-blue-500', growth: 'bg-yellow-500', fully_developed: 'bg-red-500', decay: 'bg-green-500' };
+	const stageLabels: Record<string, string> = {
+		incipient: 'Incipient',
+		growth: 'Growth',
+		fully_developed: 'Fully Developed',
+		decay: 'Decay'
+	};
+	const stageBadgeClass: Record<string, string> = {
+		incipient: 'bg-blue-500',
+		growth: 'bg-yellow-500',
+		fully_developed: 'bg-red-500',
+		decay: 'bg-green-500'
+	};
 
 	const radioById = $derived.by(() => {
 		const m: Record<string, (typeof data.radioMessages)[number]> = {};
@@ -64,7 +74,12 @@
 
 	const groupedStages = $derived.by(() => {
 		const stages: GroupedStage[] = [];
-		let currentStage: GroupedStage = { stage: 'incipient', startTime: '', events: [], radioMessages: [] };
+		let currentStage: GroupedStage = {
+			stage: 'incipient',
+			startTime: '',
+			events: [],
+			radioMessages: []
+		};
 
 		const radios = radioById;
 		for (const event of data.events) {
@@ -94,7 +109,11 @@
 	});
 
 	function formatTime(ts: string | Date) {
-		return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		return new Date(ts).toLocaleTimeString('en-US', {
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
 	}
 
 	const reviewBoardEntries = $derived(
@@ -128,7 +147,10 @@
 		}>
 	);
 
-	type ActionStatus = { status: 'completed' | 'delayed' | 'missed' | 'pending'; atSeconds?: number };
+	type ActionStatus = {
+		status: 'completed' | 'delayed' | 'missed' | 'pending';
+		atSeconds?: number;
+	};
 
 	const expectedActionStatus = $derived.by(() => {
 		const map = new Map<string, ActionStatus>();
@@ -185,7 +207,7 @@
 	}
 </script>
 
-<main class="mx-auto w-full max-w-6xl px-5 py-8 pb-safe sm:px-8 sm:py-12">
+<main class="pb-safe mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
 	{#if reviewCaps.eventsTruncated || reviewCaps.radioTruncated}
 		<div
 			class="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-5 py-4 text-base text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
@@ -197,7 +219,9 @@
 					<li>Showing the most recent {reviewCaps.eventLimit} events (older events are hidden).</li>
 				{/if}
 				{#if reviewCaps.radioTruncated}
-					<li>Showing the most recent {reviewCaps.radioLimit} radio clips (older clips are hidden).</li>
+					<li>
+						Showing the most recent {reviewCaps.radioLimit} radio clips (older clips are hidden).
+					</li>
 				{/if}
 			</ul>
 		</div>
@@ -206,12 +230,28 @@
 		<div class="min-w-0">
 			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Session Review</h1>
 			<p class="mt-2 text-base text-muted-foreground sm:text-lg">{data.scenario.title}</p>
+			{#if data.viewedAs === 'org_owner' && data.student}
+				<p class="mt-1 text-sm font-medium text-foreground">
+					Reviewing {data.student.name}'s run
+					<span class="font-normal text-muted-foreground">({data.student.email})</span>
+				</p>
+			{/if}
 			<div class="mt-3 flex flex-wrap items-center gap-2.5 text-base text-muted-foreground">
 				<span>{new Date(data.session.startedAt).toLocaleDateString()}</span>
 				<Badge variant="outline">Duration: {duration}</Badge>
-				<Badge variant="outline">{data.session.mode === 'self_practice' ? (expectedActions.length > 0 ? 'Self-Paced' : 'Self Practice') : 'Instructor-Led'}</Badge>
+				<Badge variant="outline"
+					>{data.session.mode === 'self_practice'
+						? expectedActions.length > 0
+							? 'Self-Paced'
+							: 'Self Practice'
+						: 'Instructor-Led'}</Badge
+				>
 				{#if data.session.endedAt}
-					<span class="rounded-full px-3 py-1 text-sm font-semibold {outcomeColor[data.session.simulationOutcome ?? 'completed'] ?? outcomeColor.completed}">
+					<span
+						class="rounded-full px-3 py-1 text-sm font-semibold {outcomeColor[
+							data.session.simulationOutcome ?? 'completed'
+						] ?? outcomeColor.completed}"
+					>
 						{outcomeLabel[data.session.simulationOutcome ?? 'completed'] ?? 'Completed'}
 					</span>
 					{#if data.session.endReason}
@@ -221,8 +261,14 @@
 			</div>
 		</div>
 		<div class="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href={resolve('/app/command/reviews')}>Past simulations</Button>
-			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href={resolve('/app/command')}>Command home</Button>
+			<Button
+				variant="outline"
+				class="min-h-11 w-full sm:w-auto"
+				href={resolve('/app/command/reviews')}>Past simulations</Button
+			>
+			<Button variant="outline" class="min-h-11 w-full sm:w-auto" href={resolve('/app/command')}
+				>Command home</Button
+			>
 		</div>
 	</div>
 
@@ -230,7 +276,10 @@
 		{#each groupedStages as group, idx (idx)}
 			<div class="rounded-xl border shadow-sm">
 				<div class="flex items-center gap-3 border-b px-5 py-4 sm:px-6">
-					<span class="rounded px-2.5 py-1 text-sm font-bold text-white {stageBadgeClass[group.stage] ?? 'bg-gray-500'}">{stageLabels[group.stage] ?? group.stage}</span>
+					<span
+						class="rounded px-2.5 py-1 text-sm font-bold text-white {stageBadgeClass[group.stage] ??
+							'bg-gray-500'}">{stageLabels[group.stage] ?? group.stage}</span
+					>
 					{#if group.startTime}
 						<span class="text-sm text-muted-foreground">Started at {group.startTime}</span>
 					{/if}
@@ -240,23 +289,41 @@
 					{#each group.events as event (event.id)}
 						<div class="px-5 py-4 sm:px-6">
 							<div class="flex items-center gap-2">
-								<span class="text-sm font-mono text-muted-foreground">{formatTime(event.timestamp)}</span>
+								<span class="font-mono text-sm text-muted-foreground"
+									>{formatTime(event.timestamp)}</span
+								>
 								<Badge
 									variant="outline"
-									class="text-xs {event.eventType === 'size_up' ? 'border-amber-300 bg-amber-50 text-amber-900' : ''}"
-								>{event.eventType.replace(/_/g, ' ')}</Badge>
+									class="text-xs {event.eventType === 'size_up'
+										? 'border-amber-300 bg-amber-50 text-amber-900'
+										: ''}">{event.eventType.replace(/_/g, ' ')}</Badge
+								>
 							</div>
 							{#if event.eventType === 'state_dispatched'}
 								<div class="mt-2 text-base leading-relaxed">
-									{#if event.payloadJson?.stage}Stage changed to {stageLabels[String(event.payloadJson.stage)] ?? event.payloadJson.stage}{/if}
-									{#if event.payloadJson?.side} Viewing Side {String(event.payloadJson.side).charAt(0).toUpperCase() + String(event.payloadJson.side).slice(1)}{/if}
-									{#if event.payloadJson?.hazard}<span class="text-red-600">Hazard: {event.payloadJson.hazard}</span>{/if}
-									{#if event.payloadJson?.update}<span class="text-blue-600">Update: {event.payloadJson.update}</span>{/if}
+									{#if event.payloadJson?.stage}Stage changed to {stageLabels[
+											String(event.payloadJson.stage)
+										] ?? event.payloadJson.stage}{/if}
+									{#if event.payloadJson?.side}
+										Viewing Side {String(event.payloadJson.side).charAt(0).toUpperCase() +
+											String(event.payloadJson.side).slice(1)}{/if}
+									{#if event.payloadJson?.hazard}<span class="text-red-600"
+											>Hazard: {event.payloadJson.hazard}</span
+										>{/if}
+									{#if event.payloadJson?.update}<span class="text-blue-600"
+											>Update: {event.payloadJson.update}</span
+										>{/if}
 								</div>
 							{:else if event.eventType === 'size_up'}
-								<div class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-950">
-									<p class="text-sm font-semibold uppercase tracking-wide text-amber-800">On-scene size-up</p>
-									<p class="mt-2">{String(event.payloadJson?.summary ?? event.payloadJson?.transcript ?? '')}</p>
+								<div
+									class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-950"
+								>
+									<p class="text-sm font-semibold tracking-wide text-amber-800 uppercase">
+										On-scene size-up
+									</p>
+									<p class="mt-2">
+										{String(event.payloadJson?.summary ?? event.payloadJson?.transcript ?? '')}
+									</p>
 								</div>
 							{/if}
 						</div>
@@ -264,26 +331,39 @@
 
 					{#each group.radioMessages as radio (radio.id)}
 						{@const rmt = String(radio.parsedCommandJson?.messageType ?? '').toLowerCase()}
-						{@const rAssign = Array.isArray(radio.parsedCommandJson?.assignments) ? radio.parsedCommandJson.assignments : []}
+						{@const rAssign = Array.isArray(radio.parsedCommandJson?.assignments)
+							? radio.parsedCommandJson.assignments
+							: []}
 						{@const rSizeUp = String(radio.parsedCommandJson?.sizeUpSummary ?? '').trim()}
 						<div class="px-5 py-4 sm:px-6">
 							<div class="flex items-center gap-2">
-								<span class="text-sm font-mono text-muted-foreground">{formatTime(radio.createdAt)}</span>
+								<span class="font-mono text-sm text-muted-foreground"
+									>{formatTime(radio.createdAt)}</span
+								>
 								<Badge variant="outline" class="bg-orange-50 text-xs text-orange-700">RADIO</Badge>
 							</div>
 							{#if radio.transcript}
-								<p class="mt-2 text-base italic leading-relaxed">"{radio.transcript}"</p>
+								<p class="mt-2 text-base leading-relaxed italic">"{radio.transcript}"</p>
 							{/if}
 							{#if radio.audioUrl}
-								<audio controls class="mt-3 h-11 w-full max-w-2xl" src={radio.audioUrl} preload="none"></audio>
+								<audio
+									controls
+									class="mt-3 h-11 w-full max-w-2xl"
+									src={radio.audioUrl}
+									preload="none"
+								></audio>
 							{/if}
 							{#if rSizeUp}
-								<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+								<div
+									class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+								>
 									<span class="font-semibold">Size-up</span>
 									<p class="mt-1 italic">"{rSizeUp}"</p>
 								</div>
 							{:else if rmt === 'size_up'}
-								<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+								<div
+									class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+								>
 									<span class="font-semibold">Size-up</span>
 									<p class="mt-1 italic">
 										"{String(radio.parsedCommandJson?.summary ?? radio.transcript ?? '')}"
@@ -302,7 +382,10 @@
 												{/if}
 												{#if (a as Record<string, unknown>).boardColumn || (a as Record<string, unknown>).division}
 													<span class="text-muted-foreground">
-														→ {String((a as Record<string, unknown>).boardColumn ?? (a as Record<string, unknown>).division)}
+														→ {String(
+															(a as Record<string, unknown>).boardColumn ??
+																(a as Record<string, unknown>).division
+														)}
 													</span>
 												{/if}
 											</li>
@@ -312,10 +395,13 @@
 							{:else if radio.parsedCommandJson?.unitName}
 								<div class="mt-3 rounded bg-muted/50 px-4 py-3 text-sm">
 									<span class="font-medium">{radio.parsedCommandJson.unitName}</span>
-									{#if radio.parsedCommandJson.assignment} — {radio.parsedCommandJson.assignment}{/if}
+									{#if radio.parsedCommandJson.assignment}
+										— {radio.parsedCommandJson.assignment}{/if}
 									{#if radio.parsedCommandJson.boardColumn || radio.parsedCommandJson.division}
 										<span class="text-muted-foreground">
-											→ {String(radio.parsedCommandJson.boardColumn ?? radio.parsedCommandJson.division)}
+											→ {String(
+												radio.parsedCommandJson.boardColumn ?? radio.parsedCommandJson.division
+											)}
 										</span>
 									{/if}
 								</div>
@@ -355,11 +441,17 @@
 							</p>
 						</div>
 						<div class="shrink-0 text-right">
-							<span class="rounded-full border px-3 py-1 text-sm font-semibold {actionStatusColor[status.status]}">
+							<span
+								class="rounded-full border px-3 py-1 text-sm font-semibold {actionStatusColor[
+									status.status
+								]}"
+							>
 								{actionStatusLabel[status.status]}
 							</span>
 							{#if status.atSeconds != null}
-								<p class="mt-1 text-xs text-muted-foreground">at {formatOffsetSeconds(status.atSeconds)}</p>
+								<p class="mt-1 text-xs text-muted-foreground">
+									at {formatOffsetSeconds(status.atSeconds)}
+								</p>
 							{/if}
 						</div>
 					</li>
@@ -369,26 +461,32 @@
 	{/if}
 
 	<div class="mt-10 rounded-xl border shadow-sm">
-		<div class="border-b px-5 py-4 sm:px-6"><h3 class="text-lg font-semibold">Final Command Board</h3></div>
+		<div class="border-b px-5 py-4 sm:px-6">
+			<h3 class="text-lg font-semibold">Final Command Board</h3>
+		</div>
 		<div class="p-3 sm:p-5">
 			<div class="overflow-x-auto pb-2 sm:overflow-x-visible sm:pb-0">
-			<div class="flex w-max min-w-full gap-2 sm:w-full sm:min-w-0">
-				{#each COMMAND_BOARD_COLUMNS as col (col.key)}
-					<div class="flex w-[6.25rem] shrink-0 flex-col border bg-muted/15 sm:w-[7rem] lg:min-w-0 lg:w-0 lg:flex-1">
-						<div class="flex min-h-12 items-center justify-center border-b bg-muted/40 px-2 py-2.5 text-center text-xs font-bold uppercase text-muted-foreground">
-							{col.header || '\u00a0'}
+				<div class="flex w-max min-w-full gap-2 sm:w-full sm:min-w-0">
+					{#each COMMAND_BOARD_COLUMNS as col (col.key)}
+						<div
+							class="flex w-[6.25rem] shrink-0 flex-col border bg-muted/15 sm:w-[7rem] lg:w-0 lg:min-w-0 lg:flex-1"
+						>
+							<div
+								class="flex min-h-12 items-center justify-center border-b bg-muted/40 px-2 py-2.5 text-center text-xs font-bold text-muted-foreground uppercase"
+							>
+								{col.header || '\u00a0'}
+							</div>
+							<div class="flex flex-col gap-2 p-2.5">
+								{#each entriesForColumn(reviewBoardEntries, col.key) as entry (entry.id ?? entry.unitName)}
+									<div class="rounded border px-2.5 py-2 text-sm">
+										<div class="font-medium">{formatUnitAssignmentLine(entry)}</div>
+										<Badge variant="outline" class="mt-1.5 text-xs">{entry.status}</Badge>
+									</div>
+								{/each}
+							</div>
 						</div>
-						<div class="flex flex-col gap-2 p-2.5">
-							{#each entriesForColumn(reviewBoardEntries, col.key) as entry (entry.id ?? entry.unitName)}
-								<div class="rounded border px-2.5 py-2 text-sm">
-									<div class="font-medium">{formatUnitAssignmentLine(entry)}</div>
-									<Badge variant="outline" class="mt-1.5 text-xs">{entry.status}</Badge>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</div>
+					{/each}
+				</div>
 			</div>
 		</div>
 		{#if reviewLegacyEntries.length > 0}

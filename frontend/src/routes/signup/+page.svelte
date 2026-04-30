@@ -21,7 +21,7 @@
 	<title>Sign up — 3 Alarm Labs</title>
 </svelte:head>
 
-<div class="flex min-h-[100dvh] w-full items-center justify-center px-4 py-6 pb-safe">
+<div class="pb-safe flex min-h-[100dvh] w-full items-center justify-center px-4 py-6">
 	<Card.Root class="mx-auto w-full max-w-sm">
 		<Card.Header>
 			<div class="flex items-center gap-1.5 text-base font-bold tracking-tight">
@@ -29,11 +29,15 @@
 				3 Alarm Labs
 			</div>
 			<Card.Title class="text-2xl">Create your account</Card.Title>
-			<Card.Description>Start building training scenarios for free.</Card.Description>
+			<Card.Description
+				>Start your Individual trial or set up a department workspace.</Card.Description
+			>
 		</Card.Header>
 		<Card.Content>
 			{#if actionData?.formError}
-				<div class="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+				<div
+					class="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+				>
 					{actionData.formError}
 				</div>
 			{/if}
@@ -43,14 +47,28 @@
 				{/if}
 				<div class="space-y-1.5">
 					<label class="text-sm font-medium" for="name">Full name</label>
-					<Input id="name" name="name" type="text" placeholder="Chief John Smith" value={actionData?.name ?? ''} required />
+					<Input
+						id="name"
+						name="name"
+						type="text"
+						placeholder="Chief John Smith"
+						value={actionData?.name ?? ''}
+						required
+					/>
 					{#if actionData?.fieldErrors?.name}
 						<p class="text-xs text-destructive">{actionData.fieldErrors.name[0]}</p>
 					{/if}
 				</div>
 				<div class="space-y-1.5">
 					<label class="text-sm font-medium" for="email">Email address</label>
-					<Input id="email" name="email" type="email" placeholder="chief@department.gov" value={actionData?.email ?? ''} required />
+					<Input
+						id="email"
+						name="email"
+						type="email"
+						placeholder="chief@department.gov"
+						value={actionData?.email ?? ''}
+						required
+					/>
 					{#if actionData?.fieldErrors?.email}
 						<p class="text-xs text-destructive">{actionData.fieldErrors.email[0]}</p>
 					{/if}
@@ -78,8 +96,8 @@
 					href={resolve(
 						(nextParam ? '/login?next=' + encodeURIComponent(nextParam) : '/login') as '/login'
 					)}
-					class="font-medium text-foreground hover:underline"
-				>Log in</a>
+					class="font-medium text-foreground hover:underline">Log in</a
+				>
 			</div>
 		</Card.Content>
 	</Card.Root>

@@ -12,7 +12,7 @@
 		LandingFooter
 	} from '$lib/components/landing';
 
-	const monthlyPrice = PLANS.individual.monthlyPrice ?? 29;
+	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
 </script>
 
 <svelte:head>

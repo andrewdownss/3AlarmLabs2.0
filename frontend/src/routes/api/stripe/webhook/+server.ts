@@ -41,7 +41,9 @@ export const POST: RequestHandler = async ({ request }) => {
 					break;
 				}
 				const subscription = await stripe.subscriptions.retrieve(subId);
-				await applySubscriptionToOrganization(orgId, customerId, subscription);
+				await applySubscriptionToOrganization(orgId, customerId, subscription, {
+					planIdFromCheckoutFlow: session.metadata?.planId
+				});
 				break;
 			}
 			case 'customer.subscription.updated': {
@@ -57,7 +59,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				const subscription = event.data.object as Stripe.Subscription;
 				const orgId = subscription.metadata?.organizationId;
 				if (!orgId) break;
-				await clearSubscriptionForOrganization(orgId, 'free');
+				await clearSubscriptionForOrganization(orgId, 'expired');
 				break;
 			}
 			default:

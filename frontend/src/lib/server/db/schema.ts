@@ -102,7 +102,8 @@ export const organizations = pgTable(
 		ownerId: text('owner_id')
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
-		planId: text('plan_id').$type<PlanId>().notNull().default('free'),
+		planId: text('plan_id').$type<PlanId>().notNull().default('expired'),
+		isPersonal: boolean('is_personal').default(false).notNull(),
 		stripeCustomerId: text('stripe_customer_id'),
 		stripeSubscriptionId: text('stripe_subscription_id'),
 		stripeCurrentPeriodEnd: timestamp('stripe_current_period_end', {
@@ -234,7 +235,11 @@ export const scenes = pgTable(
 		index('scenes_user_id_idx').on(table.userId),
 		index('scenes_user_updated_at_idx').on(table.userId, table.updatedAt),
 		index('scenes_org_id_idx').on(table.organizationId),
-		index('scenes_org_folder_updated_idx').on(table.organizationId, table.folderId, table.updatedAt),
+		index('scenes_org_folder_updated_idx').on(
+			table.organizationId,
+			table.folderId,
+			table.updatedAt
+		),
 		index('scenes_share_token_idx').on(table.shareToken)
 	]
 );
@@ -276,6 +281,8 @@ export const trainerScenarios = pgTable(
 			.$type<Array<{ unitName: string; status: string }>>()
 			.notNull()
 			.default([]),
+		isLibrary: boolean('is_library').default(false).notNull(),
+		publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
 		createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
 			.defaultNow()
@@ -284,7 +291,8 @@ export const trainerScenarios = pgTable(
 	},
 	(table) => [
 		index('trainer_scenarios_created_by_idx').on(table.createdBy),
-		index('trainer_scenarios_org_id_idx').on(table.organizationId)
+		index('trainer_scenarios_org_id_idx').on(table.organizationId),
+		index('trainer_scenarios_library_published_idx').on(table.isLibrary, table.publishedAt)
 	]
 );
 

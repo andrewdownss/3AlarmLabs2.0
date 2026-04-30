@@ -1,8 +1,9 @@
 export declare const env: {
-    API_PORT: string;
     TRAINER_DATABASE_URL: string;
+    API_PORT: string;
     REDIS_URL: string;
     CORS_ORIGIN: string;
+    DATABASE_URL?: string | undefined;
     OPENAI_API_KEY?: string | undefined;
     UPLOADTHING_TOKEN?: string | undefined;
     DATABASE_POOL_MAX?: string | undefined;

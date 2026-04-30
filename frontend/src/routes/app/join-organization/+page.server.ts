@@ -14,6 +14,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	default: async ({ locals, request }) => {
 		if (!locals.user) throw redirect(303, '/login');
+		const userId = locals.user.id;
 
 		const form = await request.formData();
 		const rawCode = String(form.get('code') ?? '');
@@ -39,9 +40,18 @@ export const actions: Actions = {
 
 		const existingMembership = await db.query.organizationMembers.findFirst({
 			where: eq(organizationMembers.userId, locals.user.id),
-			columns: { organizationId: true }
+			columns: { id: true, organizationId: true },
+			with: {
+				organization: {
+					columns: { isPersonal: true }
+				}
+			}
 		});
-		if (existingMembership && existingMembership.organizationId !== org.id) {
+		if (
+			existingMembership &&
+			existingMembership.organizationId !== org.id &&
+			!existingMembership.organization?.isPersonal
+		) {
 			return fail(409, {
 				error: 'You are already part of an organization. Leave it before joining another.'
 			});
@@ -72,14 +82,25 @@ export const actions: Actions = {
 			});
 		}
 
-		await db.insert(organizationMembers).values({
-			id: crypto.randomUUID(),
-			organizationId: org.id,
-			userId: locals.user.id,
-			role: 'member'
+		await db.transaction(async (tx) => {
+			if (
+				existingMembership?.organization?.isPersonal &&
+				existingMembership.organizationId !== org.id
+			) {
+				await tx
+					.delete(organizationMembers)
+					.where(eq(organizationMembers.id, existingMembership.id));
+			}
+
+			await tx.insert(organizationMembers).values({
+				id: crypto.randomUUID(),
+				organizationId: org.id,
+				userId,
+				role: 'member'
+			});
 		});
 
-		invalidateLayoutCache(locals.user.id);
+		invalidateLayoutCache(userId);
 
 		throw redirect(303, '/app/command');
 	}

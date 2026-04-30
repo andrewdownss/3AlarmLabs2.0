@@ -3,7 +3,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { PLANS } from '$lib/plans';
 
-	const monthlyPrice = PLANS.individual.monthlyPrice ?? 29;
+	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
+	const individualSignupHref = '/signup?next=%2Fapp%2Fstart-individual';
 
 	const demoMail =
 		'mailto:sales@3alarmlabs.com?subject=' +
@@ -43,13 +44,15 @@
 		<main class="py-12 sm:py-16">
 			<div class="mx-auto max-w-3xl">
 				<header>
-					<p class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Request a demo</p>
+					<p class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+						Request a demo
+					</p>
 					<h1 class="mt-4 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
 						See 3 Alarm Labs for your department.
 					</h1>
 					<p class="mt-5 text-base leading-7 text-muted-foreground sm:text-lg">
-						A 30-minute walkthrough covering instructor-led Command sessions, self-paced scenarios for every member,
-						and how after-action review helps officers develop on-shift.
+						A 30-minute walkthrough covering instructor-led Command sessions, self-paced scenarios
+						for every member, and how after-action review helps officers develop on-shift.
 					</p>
 				</header>
 
@@ -76,13 +79,15 @@
 					</article>
 				</section>
 
-				<section class="mt-10 rounded-none border border-border bg-primary p-6 text-primary-foreground shadow-sm sm:p-8">
+				<section
+					class="mt-10 rounded-none border border-border bg-primary p-6 text-primary-foreground shadow-sm sm:p-8"
+				>
 					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div class="max-w-xl">
 							<h2 class="text-2xl font-semibold tracking-tight">Email to schedule a demo</h2>
 							<p class="mt-2 text-sm leading-6 text-primary-foreground/85">
-								We'll reply within one business day with a scheduling link and a short intake email so we can tailor
-								the walkthrough to your department.
+								We'll reply within one business day with a scheduling link and a short intake email
+								so we can tailor the walkthrough to your department.
 							</p>
 						</div>
 						<Button
@@ -96,13 +101,19 @@
 				</section>
 
 				<section class="mt-10">
-					<h2 class="text-xl font-semibold tracking-tight text-foreground">Prefer to self-serve?</h2>
+					<h2 class="text-xl font-semibold tracking-tight text-foreground">
+						Prefer to self-serve?
+					</h2>
 					<p class="mt-2 text-sm leading-6 text-muted-foreground">
-						Individual firefighters and acting officers can start self-paced training for ${monthlyPrice}/month without a demo.
+						Individual firefighters and acting officers can start self-paced training for ${monthlyPrice}/month
+						after a 7-day trial without a demo.
 					</p>
 					<div class="mt-4 flex flex-wrap gap-3">
-						<Button class="rounded-none bg-[#E85D20] text-white hover:bg-[#D4501A]" href="/signup">
-							Start for ${monthlyPrice}/month
+						<Button
+							class="rounded-none bg-[#E85D20] text-white hover:bg-[#D4501A]"
+							href={individualSignupHref}
+						>
+							Start 7-day trial
 						</Button>
 						<Button variant="outline" class="rounded-none" href="/pricing">See pricing</Button>
 					</div>

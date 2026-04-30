@@ -1,3 +1,4 @@
+import type { SimulationOutcome } from '../lib/self-paced.js';
 export interface SessionRow {
     id: string;
     scenarioId: string;
@@ -11,6 +12,10 @@ export interface SessionRow {
     hasStarted: boolean;
     startedAt: Date;
     endedAt: Date | null;
+    pausedAt: Date | null;
+    accumulatedPauseMs: number;
+    simulationOutcome: SimulationOutcome;
+    endReason: string | null;
 }
 /**
  * Load a session and verify the given user is a participant (instructor or student).

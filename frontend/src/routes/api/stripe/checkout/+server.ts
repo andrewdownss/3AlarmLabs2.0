@@ -34,15 +34,24 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	if (!org || org.ownerId !== locals.user.id) throw error(403, 'Forbidden');
 
 	const origin = url.origin;
-	const session = await createCheckoutSession({
-		organizationId: org.id,
-		planId,
-		billingInterval,
-		customerEmail: locals.user.email,
-		stripeCustomerId: org.stripeCustomerId,
-		successUrl: `${origin}/app/settings/billing?checkout=success`,
-		cancelUrl: `${origin}/app/settings/billing?checkout=cancel`
-	});
+
+	let session;
+	try {
+		session = await createCheckoutSession({
+			organizationId: org.id,
+			planId,
+			billingInterval,
+			customerEmail: locals.user.email,
+			stripeCustomerId: org.stripeCustomerId,
+			successUrl: `${origin}/app/settings/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+			cancelUrl: `${origin}/app/settings/billing?checkout=cancel`
+		});
+	} catch (e) {
+		console.error('[api/stripe/checkout]', e);
+		const message =
+			e instanceof Error ? e.message : 'Could not create Stripe Checkout. Check credentials and logs.';
+		return json({ message }, { status: 502 });
+	}
 
 	if (!session.url) throw error(500, 'Checkout session missing URL');
 	return json({ url: session.url });

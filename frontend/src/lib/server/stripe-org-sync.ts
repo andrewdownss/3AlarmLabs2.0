@@ -9,12 +9,17 @@ import { invalidateLayoutCache } from '$lib/server/cache';
 export async function applySubscriptionToOrganization(
 	organizationId: string,
 	stripeCustomerId: string,
-	subscription: Stripe.Subscription
+	subscription: Stripe.Subscription,
+	options?: {
+		/** When env Stripe price IDs don’t match the live price, fall back to checkout metadata */
+		planIdFromCheckoutFlow?: string | null;
+	}
 ): Promise<void> {
 	let planId: PlanId | null = getPlanIdFromSubscription(subscription);
 	if (!planId) {
-		const metaPlan = subscription.metadata?.planId;
-		planId = metaPlan ? normalizePlanId(metaPlan) : 'free';
+		const metaPlan =
+			subscription.metadata?.planId || options?.planIdFromCheckoutFlow;
+		planId = metaPlan ? normalizePlanId(metaPlan) : 'expired';
 	}
 
 	const periodEndSec = (subscription as unknown as { current_period_end?: number })
@@ -41,7 +46,7 @@ export async function applySubscriptionToOrganization(
 
 export async function clearSubscriptionForOrganization(
 	organizationId: string,
-	fallbackPlanId: PlanId = 'free'
+	fallbackPlanId: PlanId = 'expired'
 ): Promise<void> {
 	await db
 		.update(organizations)

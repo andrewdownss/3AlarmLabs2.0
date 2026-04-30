@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { db } from '../db/index.js';
-import { trainerRadioMessages, trainerCommandBoardEntries, trainerSessionEvents } from '../db/schema/trainer.js';
+import { trainerRadioMessages, trainerCommandBoardEntries, trainerSessionEvents, trainerScenarios } from '../db/schema/trainer.js';
 import { eq, and } from 'drizzle-orm';
 import { transcribeAudio } from '../services/transcription.js';
 import { parseCommand } from '../services/command-parser.js';
 import { normalizeBoardColumn, extractAssignmentActions, shouldPlaceAssignment, resolveSizeUpSummary } from '../lib/trainer-board-columns.js';
 import { getSessionForUser } from '../middleware/authz.js';
+import { endSession, evaluateAfterBoardChange } from '../lib/self-paced-runtime.js';
+import { isUnderControlDeclaration, parseSelfPacedConfig } from '../lib/self-paced.js';
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 export function createRadioRouter(io) {
     const router = Router();
@@ -21,20 +23,29 @@ export function createRadioRouter(io) {
             res.status(404).json({ error: 'Session not found' });
             return;
         }
-        let audioUrl = '';
-        try {
-            const { UTApi } = await import('uploadthing/server');
-            const utapi = new UTApi({ token: process.env.UPLOADTHING_TOKEN });
-            const file = new File([new Uint8Array(req.file.buffer)], req.file.originalname || 'radio.webm', { type: req.file.mimetype });
-            const result = await utapi.uploadFiles(file);
-            audioUrl = result.data?.ufsUrl || '';
-        }
-        catch (err) {
-            console.error('[radio] Upload failed:', err);
-        }
+        const audioBuffer = req.file.buffer;
+        const audioMime = req.file.mimetype;
+        const audioName = req.file.originalname || 'radio.webm';
+        // Upload runs in parallel with transcription (independent work) and is
+        // deliberately not awaited before responding. The `audioUrl` is only
+        // used for replay/review, so we patch the DB row once the upload
+        // resolves without blocking the radio feedback loop.
+        const uploadPromise = (async () => {
+            try {
+                const { UTApi } = await import('uploadthing/server');
+                const utapi = new UTApi({ token: process.env.UPLOADTHING_TOKEN });
+                const file = new File([new Uint8Array(audioBuffer)], audioName, { type: audioMime });
+                const result = await utapi.uploadFiles(file);
+                return result.data?.ufsUrl || '';
+            }
+            catch (err) {
+                console.error('[radio] Upload failed:', err);
+                return '';
+            }
+        })();
         let transcript = '';
         try {
-            transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
+            transcript = await transcribeAudio(audioBuffer, audioMime);
         }
         catch (err) {
             console.error('[radio] Transcription failed:', err);
@@ -50,8 +61,21 @@ export function createRadioRouter(io) {
         }
         const messageId = crypto.randomUUID();
         await db.insert(trainerRadioMessages).values({
-            id: messageId, sessionId, audioUrl, transcript,
+            id: messageId, sessionId, audioUrl: '', transcript,
             parsedCommandJson: parsedCommand, speakerRole: 'student'
+        });
+        void uploadPromise.then(async (url) => {
+            if (!url)
+                return;
+            try {
+                await db
+                    .update(trainerRadioMessages)
+                    .set({ audioUrl: url })
+                    .where(eq(trainerRadioMessages.id, messageId));
+            }
+            catch (err) {
+                console.error('[radio] Failed to patch audioUrl:', err);
+            }
         });
         await db.insert(trainerSessionEvents).values({
             id: crypto.randomUUID(), sessionId,
@@ -124,7 +148,25 @@ export function createRadioRouter(io) {
             io.to(`session:${sessionId}`).emit('trainer:board:updated', { entry });
         }
         io.to(`session:${sessionId}`).emit('trainer:radio:transcribed', { transcript, parsedCommand });
-        res.json({ transcript, command: parsedCommand, audioUrl });
+        if (actions.length > 0) {
+            await evaluateAfterBoardChange(io, sessionId);
+        }
+        if (transcript && isUnderControlDeclaration(transcript)) {
+            const [scenarioRow] = await db
+                .select({ config: trainerScenarios.selfPacedConfigJson })
+                .from(trainerScenarios)
+                .where(eq(trainerScenarios.id, session.scenarioId))
+                .limit(1);
+            const config = parseSelfPacedConfig(scenarioRow?.config ?? null);
+            if (config?.endConditions.onUnderControl) {
+                await endSession(io, sessionId, {
+                    outcome: 'completed',
+                    reason: 'under_control',
+                    payload: { messageId, transcript }
+                });
+            }
+        }
+        res.json({ messageId, transcript, command: parsedCommand });
     });
     return router;
 }

@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from '$lib/server/password';
 import { sendPasswordResetEmail } from '$lib/server/email';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getRequestEvent } from '$app/server';
+import { dev } from '$app/environment';
 import { invalidateUserCache } from '$lib/server/cache';
 
 export const auth = betterAuth({
@@ -36,8 +37,9 @@ export const auth = betterAuth({
 		}
 	},
 	sessions: { strategy: 'database' },
-	// Must match the browser origin (include port in dev, e.g. http://localhost:5173). If unset,
-	// Better Auth derives the origin from each request — avoids404 on /api/auth/* when env says http://localhost.
-	baseURL: env.BETTER_AUTH_BASE_URL?.trim() || undefined,
+	// Production: set BETTER_AUTH_BASE_URL to the public site URL. In `vite dev`, omitting baseURL lets
+	// Better Auth use the request origin so /api/auth/* matches even when .env has a different port
+	// (e.g. Docker :3000) than the Vite server (e.g. :5173) — otherwise sign-out returns 404.
+	baseURL: dev ? undefined : (env.BETTER_AUTH_BASE_URL?.trim() || undefined),
 	plugins: [sveltekitCookies(getRequestEvent)]
 });

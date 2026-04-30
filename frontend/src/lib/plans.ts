@@ -1,5 +1,5 @@
 export const PLAN_IDS = [
-	'free',
+	'expired',
 	'individual',
 	'small_firehouse',
 	'medium_firehouse',
@@ -20,7 +20,8 @@ export interface PlanConfig {
 	canExportVideo: boolean;
 	canShareLink: boolean;
 	canUseFolders: boolean;
-	/** Self-serve Stripe Checkout (null for free / enterprise contact) */
+	canAccessLibrary: boolean;
+	/** Self-serve Stripe Checkout (false for enterprise/contact-sales plans) */
 	canSelfServeCheckout: boolean;
 	checkoutIntervals: BillingInterval[];
 	limitsSummary: string;
@@ -32,42 +33,44 @@ export interface PlanConfig {
 }
 
 export const PLANS: Record<PlanId, PlanConfig> = {
-	free: {
-		id: 'free',
-		name: 'Free',
-		maxScenes: 3,
-		maxCommandScenarios: 3,
-		maxUsers: 3,
-		watermark: true,
+	expired: {
+		id: 'expired',
+		name: 'No subscription',
+		maxScenes: 0,
+		maxCommandScenarios: 0,
+		maxUsers: 1,
+		watermark: false,
 		canExportVideo: false,
 		canShareLink: false,
 		canUseFolders: false,
-		canSelfServeCheckout: false,
+		canAccessLibrary: false,
+		canSelfServeCheckout: true,
 		checkoutIntervals: [],
-		limitsSummary: 'Up to 3 scenes, basic features.',
-		bestFor: 'Trying it out',
+		limitsSummary: 'No billing on file yet. Subscribe to unlock training.',
+		bestFor: 'Restarting access',
 		canInstructorLedCommand: false,
-		monthlyPrice: 0,
-		annualPrice: 0
+		monthlyPrice: null,
+		annualPrice: null
 	},
 	individual: {
 		id: 'individual',
 		name: 'Individual',
-		maxScenes: 3,
-		maxCommandScenarios: 3,
+		maxScenes: -1,
+		maxCommandScenarios: -1,
 		maxUsers: 1,
 		watermark: false,
 		canExportVideo: false,
 		canShareLink: true,
 		canUseFolders: false,
+		canAccessLibrary: true,
 		canSelfServeCheckout: true,
-		checkoutIntervals: ['month', 'year'],
+		checkoutIntervals: ['month'],
 		limitsSummary:
-			'1 user, self-paced only, up to 3 active SizeUp scenes, up to 3 active Command scenarios.',
-		bestFor: 'Individual firefighters/officers',
+			'1 user, unlimited SizeUp scenes, unlimited self-paced Command, and weekly library scenarios.',
+		bestFor: 'Promote your career with self-paced command training',
 		canInstructorLedCommand: false,
-		monthlyPrice: 29,
-		annualPrice: 299
+		monthlyPrice: 14.99,
+		annualPrice: null
 	},
 	small_firehouse: {
 		id: 'small_firehouse',
@@ -79,6 +82,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 		canExportVideo: false,
 		canShareLink: true,
 		canUseFolders: true,
+		canAccessLibrary: true,
 		canSelfServeCheckout: true,
 		checkoutIntervals: ['year'],
 		limitsSummary:
@@ -98,6 +102,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 		canExportVideo: false,
 		canShareLink: true,
 		canUseFolders: true,
+		canAccessLibrary: true,
 		canSelfServeCheckout: true,
 		checkoutIntervals: ['year'],
 		limitsSummary:
@@ -117,6 +122,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 		canExportVideo: true,
 		canShareLink: true,
 		canUseFolders: true,
+		canAccessLibrary: true,
 		canSelfServeCheckout: true,
 		checkoutIntervals: ['year'],
 		limitsSummary:
@@ -136,6 +142,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 		canExportVideo: true,
 		canShareLink: true,
 		canUseFolders: true,
+		canAccessLibrary: true,
 		canSelfServeCheckout: false,
 		checkoutIntervals: [],
 		limitsSummary:
@@ -150,12 +157,13 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 export function normalizePlanId(raw: string | null | undefined): PlanId {
 	if (raw && raw in PLANS) return raw as PlanId;
 	const legacyMap: Record<string, PlanId> = {
+		free: 'expired',
 		team: 'small_firehouse',
 		instructor: 'medium_firehouse',
 		enterprise: 'large_firehouse'
 	};
 	if (raw && raw in legacyMap) return legacyMap[raw];
-	return 'free';
+	return 'expired';
 }
 
 export function getPlanConfig(planId: PlanId): PlanConfig {

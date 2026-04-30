@@ -14,13 +14,14 @@
 
 	let { monthlyPrice, heroEyebrow, heroTitle, heroDescription, bodyHtml }: MarketingTemplateProps =
 		$props();
+	const individualSignupHref = '/signup?next=%2Fapp%2Fstart-individual';
 </script>
 
 <div class="min-h-screen bg-muted/25 text-foreground">
 	<div class="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
 		<LandingHeader {monthlyPrice} />
 
-		<main class="mx-auto w-full max-w-3xl pb-16 pt-10 sm:pb-20 sm:pt-12">
+		<main class="mx-auto w-full max-w-3xl pt-10 pb-16 sm:pt-12 sm:pb-20">
 			<article class="rounded-none bg-background px-4 py-10 sm:px-10 sm:py-12">
 				<header>
 					<div
@@ -39,7 +40,7 @@
 						<div
 							class="rounded-none border border-border bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm"
 						>
-							${monthlyPrice}/month
+							${monthlyPrice}/month after trial
 						</div>
 						{#each proofPoints as item (item)}
 							<div
@@ -53,12 +54,14 @@
 
 				{#if bodyHtml}
 					<div
-						class="prose prose-slate mt-10 max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-[#E85D20] hover:prose-a:text-[#D4501A] prose-a:no-underline hover:prose-a:underline"
+						class="prose mt-10 max-w-none prose-slate prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-[#E85D20] prose-a:no-underline hover:prose-a:text-[#D4501A] hover:prose-a:underline"
 					>
 						{@html bodyHtml}
 					</div>
 				{:else}
-					<div class="mt-10 rounded-none border border-dashed border-border bg-muted/40 p-6 text-sm text-muted-foreground">
+					<div
+						class="mt-10 rounded-none border border-dashed border-border bg-muted/40 p-6 text-sm text-muted-foreground"
+					>
 						Content for this page hasn't been written yet. Author it in
 						<code class="rounded-none bg-background px-1 py-0.5">src/lib/marketing/content/</code>
 						as a Markdown file.
@@ -69,18 +72,21 @@
 					<div class="rounded-none border border-border bg-muted/30 p-6 shadow-sm">
 						<div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
 							<div class="min-w-0">
-								<h2 class="text-2xl font-semibold tracking-tight text-foreground">Start practicing now</h2>
+								<h2 class="text-2xl font-semibold tracking-tight text-foreground">
+									Start practicing now
+								</h2>
 								<p class="mt-2 text-sm leading-6 text-muted-foreground">
-									Self-paced scenarios with replay review so you can build confidence and improve each run.
+									Self-paced scenarios with replay review so you can build confidence and improve
+									each run.
 								</p>
 							</div>
 
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-center">
 								<Button
 									class="rounded-none bg-[#E85D20] text-white hover:bg-[#D4501A]"
-									href={resolve('/signup')}
+									href={individualSignupHref}
 								>
-									Start for ${monthlyPrice}/month
+									Start 7-day trial
 								</Button>
 								<Button variant="outline" class="rounded-none" href={resolve('/pricing')}>
 									See ${monthlyPrice}/month pricing

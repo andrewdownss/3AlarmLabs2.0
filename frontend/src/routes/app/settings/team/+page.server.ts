@@ -23,12 +23,23 @@ export const load: PageServerLoad = async ({ locals }) => {
 		return { isOwner: false as const };
 	}
 
+	if (ownedOrg.isPersonal) {
+		const plan = getPlanConfig(normalizePlanId(ownedOrg.planId));
+		return {
+			isOwner: true as const,
+			isPersonal: true as const,
+			organization: ownedOrg,
+			plan,
+			members: [],
+			pendingInvites: [],
+			memberCount: 1,
+			canInvite: false
+		};
+	}
+
 	if (!ownedOrg.joinCode) {
 		const joinCode = await allocateUniqueOrganizationJoinCode();
-		await db
-			.update(organizations)
-			.set({ joinCode })
-			.where(eq(organizations.id, ownedOrg.id));
+		await db.update(organizations).set({ joinCode }).where(eq(organizations.id, ownedOrg.id));
 		ownedOrg = { ...ownedOrg, joinCode };
 	}
 
@@ -80,12 +91,12 @@ export const actions: Actions = {
 		if (!ownedOrg) {
 			return fail(403, { error: 'Only organization owners can change the department code.' });
 		}
+		if (ownedOrg.isPersonal) {
+			return fail(403, { error: 'Personal accounts do not use department join codes.' });
+		}
 
 		const joinCode = await allocateUniqueOrganizationJoinCode();
-		await db
-			.update(organizations)
-			.set({ joinCode })
-			.where(eq(organizations.id, ownedOrg.id));
+		await db.update(organizations).set({ joinCode }).where(eq(organizations.id, ownedOrg.id));
 
 		return { regeneratedJoinCode: joinCode as string };
 	},
@@ -98,6 +109,12 @@ export const actions: Actions = {
 		});
 		if (!ownedOrg) {
 			return fail(403, { error: 'Only organization owners can send invites.' });
+		}
+		if (ownedOrg.isPersonal) {
+			return fail(403, {
+				error:
+					'Personal accounts cannot invite members. Upgrade to a Firehouse plan to add your crew.'
+			});
 		}
 
 		const plan = getPlanConfig(normalizePlanId(ownedOrg.planId));
@@ -115,7 +132,9 @@ export const actions: Actions = {
 		}
 
 		const form = await request.formData();
-		const rawEmail = String(form.get('email') ?? '').trim().toLowerCase();
+		const rawEmail = String(form.get('email') ?? '')
+			.trim()
+			.toLowerCase();
 		if (!rawEmail || !rawEmail.includes('@')) {
 			return fail(400, { error: 'Enter a valid email address.' });
 		}

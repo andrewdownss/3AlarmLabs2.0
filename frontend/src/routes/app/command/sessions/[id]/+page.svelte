@@ -91,9 +91,16 @@
 
 	let lastHydratedSessionId = $state<string | null>(null);
 
-	function syncClock(startedAtIso: string) {
-		const elapsed = Math.floor((Date.now() - new Date(startedAtIso).getTime()) / 1000);
-		sessionSeconds = Math.max(0, elapsed);
+	function syncClock(
+		startedAt: Date | string,
+		pausedAt: Date | string | null = null,
+		accumulatedPauseMs = 0
+	) {
+		const now = Date.now();
+		const started = new Date(startedAt).getTime();
+		const openPauseMs = pausedAt ? Math.max(0, now - new Date(pausedAt).getTime()) : 0;
+		const elapsedMs = Math.max(0, now - started - accumulatedPauseMs - openPauseMs);
+		sessionSeconds = Math.floor(elapsedMs / 1000);
 	}
 
 	$effect.pre(() => {
@@ -109,9 +116,13 @@
 			Boolean(data.session.hasStarted);
 		isPaused = Boolean(data.session.pausedAt);
 		if (hasStarted && data.session.startedAt) {
-			syncClock(new Date(data.session.startedAt).toISOString());
+			syncClock(
+				data.session.startedAt,
+				data.session.pausedAt,
+				data.session.accumulatedPauseMs ?? 0
+			);
 		}
-		boardEntries = (data.boardEntries ?? []).map((e: typeof data.boardEntries[number]) => ({
+		boardEntries = (data.boardEntries ?? []).map((e: (typeof data.boardEntries)[number]) => ({
 			id: e.id,
 			division: e.division ?? 'Unassigned',
 			unitName: e.unitName,
@@ -122,19 +133,19 @@
 
 	const availableUnits = $derived(
 		(data.scenario.defaultResources ?? []).filter(
-			(r: { unitName: string }) => !boardEntries.some(e => e.unitName === r.unitName)
+			(r: { unitName: string }) => !boardEntries.some((e) => e.unitName === r.unitName)
 		)
 	);
 
 	const legacyBoardEntries = $derived(orphanBoardEntries(boardEntries as BoardEntryLike[]));
 
 	const STATUS_COLORS: Record<string, string> = {
-		'Assigned': 'bg-blue-100 text-blue-700',
+		Assigned: 'bg-blue-100 text-blue-700',
 		'En Route': 'bg-amber-100 text-amber-700',
 		'On Scene': 'bg-purple-100 text-purple-700',
-		'Operating': 'bg-green-100 text-green-700',
+		Operating: 'bg-green-100 text-green-700',
 		'PAR Completed': 'bg-emerald-100 text-emerald-800',
-		'Available': 'bg-gray-100 text-gray-600',
+		Available: 'bg-gray-100 text-gray-600',
 		'Out of Service': 'bg-red-100 text-red-700'
 	};
 	let timelineEvents = $state<Array<{ id: string; type: string; text: string; time: string }>>([
@@ -164,9 +175,24 @@
 		activeStream = null;
 	}
 
-	const stageLabels: Record<string, string> = { incipient: 'Incipient', growth: 'Growth', fully_developed: 'Fully Developed', decay: 'Decay' };
-	const stageBadgeClass: Record<string, string> = { incipient: 'bg-blue-500', growth: 'bg-yellow-500', fully_developed: 'bg-red-500', decay: 'bg-green-500' };
-	const sideLabels: Record<string, string> = { alpha: 'Side Alpha', bravo: 'Side Bravo', charlie: 'Side Charlie', delta: 'Side Delta' };
+	const stageLabels: Record<string, string> = {
+		incipient: 'Incipient',
+		growth: 'Growth',
+		fully_developed: 'Fully Developed',
+		decay: 'Decay'
+	};
+	const stageBadgeClass: Record<string, string> = {
+		incipient: 'bg-blue-500',
+		growth: 'bg-yellow-500',
+		fully_developed: 'bg-red-500',
+		decay: 'bg-green-500'
+	};
+	const sideLabels: Record<string, string> = {
+		alpha: 'Side Alpha',
+		bravo: 'Side Bravo',
+		charlie: 'Side Charlie',
+		delta: 'Side Delta'
+	};
 
 	const sideImageMap = $derived.by(() => ({
 		alpha: data.scenario.sideAlphaImageUrl,
@@ -187,24 +213,35 @@
 		return value as PersistedAnimationOverlay[];
 	}
 
-	function getOverlaysForSideStage(meta: SideStageOverlays, side: string, stage: string): AnimationOverlay[] {
+	function getOverlaysForSideStage(
+		meta: SideStageOverlays,
+		side: string,
+		stage: string
+	): AnimationOverlay[] {
 		const raw = (meta[side] as StageOverlays | undefined)?.[stage];
 		return normalizeAnimationOverlays(parsePersistedOverlays(raw));
 	}
 
-	const currentOverlays = $derived(getOverlaysForSideStage(stageMetadata, currentSide, currentStage));
+	const currentOverlays = $derived(
+		getOverlaysForSideStage(stageMetadata, currentSide, currentStage)
+	);
 	const hasOverlays = $derived(currentOverlays.length > 0);
 
 	const overlayKey = $derived(`${currentSide}-${currentStage}`);
 
 	function formatClock(seconds: number) {
-		const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+		const m = Math.floor(seconds / 60)
+			.toString()
+			.padStart(2, '0');
 		const s = (seconds % 60).toString().padStart(2, '0');
 		return `${m}:${s}`;
 	}
 
-	function addTimelineEvent(type: string, text: string) {
-		timelineEvents = [...timelineEvents, { id: crypto.randomUUID(), type, text, time: formatClock(sessionSeconds) }];
+	function addTimelineEvent(type: string, text: string, atSeconds = sessionSeconds) {
+		timelineEvents = [
+			...timelineEvents,
+			{ id: crypto.randomUUID(), type, text, time: formatClock(atSeconds) }
+		];
 	}
 
 	async function startRecording() {
@@ -232,9 +269,13 @@
 
 			activeStream = stream;
 			const mimeType = pickAudioMimeType();
-			mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+			mediaRecorder = mimeType
+				? new MediaRecorder(stream, { mimeType })
+				: new MediaRecorder(stream);
 			const recordedType =
-				mediaRecorder.mimeType && mediaRecorder.mimeType !== '' ? mediaRecorder.mimeType : 'audio/webm';
+				mediaRecorder.mimeType && mediaRecorder.mimeType !== ''
+					? mediaRecorder.mimeType
+					: 'audio/webm';
 
 			audioChunks = [];
 			mediaRecorder.ondataavailable = (e) => {
@@ -258,7 +299,11 @@
 				fd.set('audio', blob, ext);
 
 				try {
-					const resp = await fetch('/api/trainer/radio', { method: 'POST', body: fd, credentials: 'include' });
+					const resp = await fetch('/api/trainer/radio', {
+						method: 'POST',
+						body: fd,
+						credentials: 'include'
+					});
 					let result: {
 						messageId?: string;
 						transcript?: string;
@@ -273,7 +318,9 @@
 					}
 					if (!resp.ok) {
 						radioError =
-							typeof result.error === 'string' ? result.error : `Radio request failed (${resp.status})`;
+							typeof result.error === 'string'
+								? result.error
+								: `Radio request failed (${resp.status})`;
 						return;
 					}
 					if (result.messageId) lastRadioMessageId = result.messageId;
@@ -293,7 +340,9 @@
 
 						const rawList = cmd.assignments;
 						const actions = Array.isArray(rawList)
-							? rawList.filter((x): x is Record<string, unknown> => x !== null && typeof x === 'object')
+							? rawList.filter(
+									(x): x is Record<string, unknown> => x !== null && typeof x === 'object'
+								)
 							: [];
 						if (actions.length > 0) {
 							for (const a of actions) {
@@ -376,6 +425,8 @@
 		side?: string;
 		hazard?: string;
 		update?: string;
+		source?: string;
+		offsetSeconds?: number;
 	}
 
 	function goToReview() {
@@ -439,15 +490,25 @@
 			method: 'POST',
 			credentials: 'include'
 		});
-		if (resp.ok) isPaused = false;
+		if (resp.ok) {
+			isPaused = false;
+			await tickSelfPaced();
+		}
 	}
 
 	async function tickSelfPaced() {
 		try {
-			await fetch(`/api/trainer/sessions/${data.session.id}/tick`, {
+			const resp = await fetch(`/api/trainer/sessions/${data.session.id}/tick`, {
 				method: 'POST',
 				credentials: 'include'
 			});
+			if (resp.ok) {
+				const body: { elapsedMs?: number; paused?: boolean } = await resp.json().catch(() => ({}));
+				if (typeof body.elapsedMs === 'number') {
+					sessionSeconds = Math.floor(Math.max(0, body.elapsedMs) / 1000);
+				}
+				if (typeof body.paused === 'boolean') isPaused = body.paused;
+			}
 		} catch (err) {
 			console.error('tick failed', err);
 		}
@@ -477,7 +538,15 @@
 	let editAssignment = $state('');
 	let editStatus = $state('');
 
-	const STATUS_CHOICES = ['Assigned', 'En Route', 'On Scene', 'Operating', 'PAR Completed', 'Available', 'Out of Service'];
+	const STATUS_CHOICES = [
+		'Assigned',
+		'En Route',
+		'On Scene',
+		'Operating',
+		'PAR Completed',
+		'Available',
+		'Out of Service'
+	];
 	const DIVISION_CHOICES = ['Basement', 'Div 1', 'Div 2', 'Div 3', 'Roof', 'RIC', 'Med', 'Reserve'];
 
 	function openEdit(entry: BoardEntry) {
@@ -507,7 +576,7 @@
 
 	onMount(() => {
 		clockInterval = setInterval(() => {
-			if (!isPaused) sessionSeconds++;
+			if (hasStarted && !isPaused) sessionSeconds++;
 		}, 1000);
 
 		if (isSelfPaced) {
@@ -527,10 +596,28 @@
 		});
 
 		socket?.on('trainer:state:dispatched', (payload: TrainerStateDispatchedPayload) => {
-			if (payload.stage) { currentStage = payload.stage; addTimelineEvent('STAGE', `Stage changed to ${stageLabels[payload.stage] ?? payload.stage}`); }
-			if (payload.side) { currentSide = payload.side; addTimelineEvent('SIDE', `Viewing ${sideLabels[payload.side] ?? payload.side}`); }
-			if (payload.hazard) addTimelineEvent('HAZARD', payload.hazard);
-			if (payload.update) addTimelineEvent('UPDATE', payload.update);
+			const eventSeconds =
+				payload.source === 'timeline' && typeof payload.offsetSeconds === 'number'
+					? payload.offsetSeconds
+					: sessionSeconds;
+			if (payload.stage) {
+				currentStage = payload.stage;
+				addTimelineEvent(
+					'STAGE',
+					`Stage changed to ${stageLabels[payload.stage] ?? payload.stage}`,
+					eventSeconds
+				);
+			}
+			if (payload.side) {
+				currentSide = payload.side;
+				addTimelineEvent(
+					'SIDE',
+					`Viewing ${sideLabels[payload.side] ?? payload.side}`,
+					eventSeconds
+				);
+			}
+			if (payload.hazard) addTimelineEvent('HAZARD', payload.hazard, eventSeconds);
+			if (payload.update) addTimelineEvent('UPDATE', payload.update, eventSeconds);
 		});
 
 		socket?.on('trainer:session:started', (payload?: { startedAt?: string }) => {
@@ -541,25 +628,30 @@
 
 		socket?.on('trainer:session:ended', goToReview);
 
-		socket?.on('trainer:board:updated', (payload: { entry?: Partial<BoardEntry> & { unitName: string } }) => {
-			const entry = payload.entry;
-			if (!entry) return;
-			const mapped: BoardEntry = {
-				id: entry.id ?? crypto.randomUUID(),
-				division: entry.division ?? 'Unassigned',
-				unitName: entry.unitName,
-				assignment: entry.assignment ?? '',
-				status: entry.status ?? 'Assigned'
-			};
-			boardEntries = [...boardEntries.filter(e => e.unitName !== mapped.unitName), mapped];
-		});
+		socket?.on(
+			'trainer:board:updated',
+			(payload: { entry?: Partial<BoardEntry> & { unitName: string } }) => {
+				const entry = payload.entry;
+				if (!entry) return;
+				const mapped: BoardEntry = {
+					id: entry.id ?? crypto.randomUUID(),
+					division: entry.division ?? 'Unassigned',
+					unitName: entry.unitName,
+					assignment: entry.assignment ?? '',
+					status: entry.status ?? 'Assigned'
+				};
+				boardEntries = [...boardEntries.filter((e) => e.unitName !== mapped.unitName), mapped];
+			}
+		);
 
 		socket?.on('trainer:board:removed', (payload: { unitName: string }) => {
-			boardEntries = boardEntries.filter(e => e.unitName !== payload.unitName);
+			boardEntries = boardEntries.filter((e) => e.unitName !== payload.unitName);
 		});
 
 		socket?.on('trainer:board:status-changed', (payload: { unitName: string; status: string }) => {
-			boardEntries = boardEntries.map(e => e.unitName === payload.unitName ? { ...e, status: payload.status } : e);
+			boardEntries = boardEntries.map((e) =>
+				e.unitName === payload.unitName ? { ...e, status: payload.status } : e
+			);
 		});
 
 		socket?.on('connect', joinRoom);
@@ -594,24 +686,47 @@
 </script>
 
 <div class="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-background">
-	<header class="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+	<header
+		class="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+	>
 		<div class="flex min-w-0 flex-wrap items-center gap-2 gap-y-1.5">
 			<h1 class="max-w-full truncate text-base font-semibold sm:text-lg">{data.scenario.title}</h1>
 			<Badge class="shrink-0 bg-green-500 text-white">{isPaused ? 'PAUSED' : 'LIVE'}</Badge>
-			<span class="shrink-0 font-mono text-xs text-muted-foreground sm:text-sm">{formatClock(sessionSeconds)}</span>
+			<span class="shrink-0 font-mono text-xs text-muted-foreground sm:text-sm"
+				>{formatClock(sessionSeconds)}</span
+			>
 			<Badge class="shrink-0" variant="outline">
-				{isSelfPaced ? 'Self-Paced' : data.session.mode === 'self_practice' ? 'Self Practice' : 'Instructor-Led'}
+				{isSelfPaced
+					? 'Self-Paced'
+					: data.session.mode === 'self_practice'
+						? 'Self Practice'
+						: 'Instructor-Led'}
 			</Badge>
 		</div>
 		<div class="flex w-full shrink-0 gap-2 sm:w-auto">
 			{#if isSelfPaced && hasStarted}
 				{#if isPaused}
-					<Button variant="outline" class="min-h-11 flex-1 sm:flex-none" size="sm" onclick={resumeSelfPaced}>Resume</Button>
+					<Button
+						variant="outline"
+						class="min-h-11 flex-1 sm:flex-none"
+						size="sm"
+						onclick={resumeSelfPaced}>Resume</Button
+					>
 				{:else}
-					<Button variant="outline" class="min-h-11 flex-1 sm:flex-none" size="sm" onclick={pauseSelfPaced}>Pause</Button>
+					<Button
+						variant="outline"
+						class="min-h-11 flex-1 sm:flex-none"
+						size="sm"
+						onclick={pauseSelfPaced}>Pause</Button
+					>
 				{/if}
 			{/if}
-			<Button variant="destructive" class="min-h-11 flex-1 sm:flex-none" size="sm" onclick={endSession}>End Session</Button>
+			<Button
+				variant="destructive"
+				class="min-h-11 flex-1 sm:flex-none"
+				size="sm"
+				onclick={endSession}>End Session</Button
+			>
 		</div>
 	</header>
 
@@ -625,17 +740,29 @@
 							<p class="mt-1 text-sm text-muted-foreground">{data.scenario.description}</p>
 						{/if}
 						{#if data.scenario.dispatchNotes}
-							<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-								<p class="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Dispatch notes</p>
+							<div
+								class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+							>
+								<p
+									class="text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-200"
+								>
+									Dispatch notes
+								</p>
 								<p class="mt-1 whitespace-pre-line">{data.scenario.dispatchNotes}</p>
 							</div>
 						{/if}
 						{#if data.scenario.sideAlphaImageUrl}
-							<img src={data.scenario.sideAlphaImageUrl} alt="Initial scene" class="mt-4 h-48 w-full rounded-lg object-cover" />
+							<img
+								src={data.scenario.sideAlphaImageUrl}
+								alt="Initial scene"
+								class="mt-4 h-48 w-full rounded-lg object-cover"
+							/>
 						{/if}
 						{#if (data.scenario.defaultResources ?? []).length > 0}
 							<div class="mt-4">
-								<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Available resources</p>
+								<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+									Available resources
+								</p>
 								<div class="mt-2 flex flex-wrap gap-1.5">
 									{#each data.scenario.defaultResources ?? [] as resource (resource.unitName)}
 										<Badge variant="secondary">{resource.unitName}</Badge>
@@ -645,10 +772,16 @@
 						{/if}
 						{#if selfPacedRunHints.length > 0}
 							<div class="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
-								<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">How this runs</p>
+								<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+									How this runs
+								</p>
 								<ul class="mt-1.5 space-y-1 text-sm text-foreground">
 									{#each selfPacedRunHints as hint}
-										<li class="flex gap-2"><span class="text-muted-foreground" aria-hidden="true">•</span><span>{hint}</span></li>
+										<li class="flex gap-2">
+											<span class="text-muted-foreground" aria-hidden="true">•</span><span
+												>{hint}</span
+											>
+										</li>
 									{/each}
 								</ul>
 							</div>
@@ -667,155 +800,234 @@
 				<div class="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
 					<div class="mx-auto mb-4 h-10 w-10 animate-pulse rounded-full bg-muted"></div>
 					<h2 class="text-xl font-semibold">Waiting for instructor to start</h2>
-					<p class="mt-2 text-sm text-muted-foreground">You're connected. The simulation will begin once your instructor starts it.</p>
+					<p class="mt-2 text-sm text-muted-foreground">
+						You're connected. The simulation will begin once your instructor starts it.
+					</p>
 				</div>
 			</div>
 		{/if}
 	{:else}
-	<div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-		<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-none">
-			<!-- Narrower canvas + page background on sides reduces wide black letterboxing (object-contain). -->
-			<div class="flex shrink-0 justify-center border-b bg-muted/30 px-2 py-2">
-				<div
-					class="relative h-[min(36vh,340px)] w-full max-w-xl overflow-hidden rounded-lg bg-black shadow-sm ring-1 ring-border/60 sm:h-[min(38vh,380px)] sm:max-w-2xl md:max-w-3xl"
-				>
-					{#if currentSideImage && hasOverlays}
-						{#key overlayKey}
-							<div class="absolute inset-0">
-								<OverlayCanvas baseImageUrl={currentSideImage} overlays={currentOverlays} selectedOverlayId={null} isInteractive={false} />
-							</div>
-						{/key}
-					{:else if currentSideImage}
-						<img src={currentSideImage} alt={sideLabels[currentSide] ?? currentSide} class="absolute inset-0 h-full w-full object-contain" />
-					{:else}
-						<div class="flex h-full w-full items-center justify-center text-white/40">No image for {sideLabels[currentSide] ?? currentSide}</div>
-					{/if}
-					<div class="absolute bottom-2 left-2 flex items-center gap-2">
-						<span class="text-xs font-medium text-white/80">{sideLabels[currentSide] ?? ''}</span>
-						<span class="rounded px-2 py-0.5 text-xs font-bold text-white {stageBadgeClass[currentStage] ?? 'bg-gray-500'}">{stageLabels[currentStage] ?? currentStage}</span>
-					</div>
-				</div>
-			</div>
-
-			<div class="flex min-h-0 min-w-0 flex-1 flex-col border-t overflow-hidden">
-				<div class="flex shrink-0 flex-col gap-1 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-					<h3 class="text-xs font-semibold">Incident Command Board</h3>
-					<span class="text-[11px] text-muted-foreground sm:text-xs">{boardEntries.length} assigned &middot; {availableUnits.length} available</span>
-				</div>
-
-				<div class="shrink-0 border-b px-3 py-2">
-					<p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Available</p>
-					<div class="flex flex-wrap gap-1.5">
-						{#each availableUnits as resource (resource.unitName)}
-							<Badge variant="secondary" class="gap-1 text-[10px] py-0">
-								<span class="h-1 w-1 rounded-full bg-green-500"></span>
-								{resource.unitName}
-							</Badge>
+		<div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+			<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-none">
+				<!-- Narrower canvas + page background on sides reduces wide black letterboxing (object-contain). -->
+				<div class="flex shrink-0 justify-center border-b bg-muted/30 px-2 py-2">
+					<div
+						class="relative h-[min(36vh,340px)] w-full max-w-xl overflow-hidden rounded-lg bg-black shadow-sm ring-1 ring-border/60 sm:h-[min(38vh,380px)] sm:max-w-2xl md:max-w-3xl"
+					>
+						{#if currentSideImage && hasOverlays}
+							{#key overlayKey}
+								<div class="absolute inset-0">
+									<OverlayCanvas
+										baseImageUrl={currentSideImage}
+										overlays={currentOverlays}
+										selectedOverlayId={null}
+										isInteractive={false}
+									/>
+								</div>
+							{/key}
+						{:else if currentSideImage}
+							<img
+								src={currentSideImage}
+								alt={sideLabels[currentSide] ?? currentSide}
+								class="absolute inset-0 h-full w-full object-contain"
+							/>
 						{:else}
-							<span class="text-[10px] text-muted-foreground">All units assigned</span>
-						{/each}
-					</div>
-				</div>
-
-				<div class="min-h-0 flex-1 overflow-hidden px-1 py-1.5">
-					<div class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1 lg:mx-0 lg:overflow-x-hidden lg:pb-0">
-						<div class="flex h-full min-h-[120px] w-max gap-0.5 lg:w-full lg:min-w-0">
-						{#each COMMAND_BOARD_COLUMNS as col (col.key)}
-							<div class="flex min-h-0 w-[4.75rem] shrink-0 flex-col border bg-muted/20 sm:w-[5.25rem] lg:min-w-0 lg:w-0 lg:flex-1">
-								<div class="flex min-h-[2rem] shrink-0 items-center justify-center border-b bg-muted/50 px-0.5 py-1 text-center text-[9px] font-bold uppercase leading-tight tracking-tight text-muted-foreground">
-									{col.header || '\u00a0'}
-								</div>
-								<div class="min-h-0 flex-1 space-y-1 overflow-y-auto p-1">
-									{#each entriesForColumn(boardEntries as BoardEntryLike[], col.key) as entry (entry.id ?? entry.unitName)}
-										<button
-											type="button"
-											onclick={() => openEdit(entry as BoardEntry)}
-											class="w-full rounded border px-1.5 py-1 text-left text-[9px] font-medium leading-tight transition-colors hover:ring-1 hover:ring-primary {STATUS_COLORS[entry.status] ?? 'bg-gray-50 text-gray-700'}"
-											title="Click to fix this entry"
-										>
-											{formatUnitAssignmentLine(entry)}
-											<div class="mt-0.5 text-[8px] opacity-70">{entry.status}</div>
-										</button>
-									{/each}
-								</div>
+							<div class="flex h-full w-full items-center justify-center text-white/40">
+								No image for {sideLabels[currentSide] ?? currentSide}
 							</div>
-						{/each}
+						{/if}
+						<div class="absolute bottom-2 left-2 flex items-center gap-2">
+							<span class="text-xs font-medium text-white/80">{sideLabels[currentSide] ?? ''}</span>
+							<span
+								class="rounded px-2 py-0.5 text-xs font-bold text-white {stageBadgeClass[
+									currentStage
+								] ?? 'bg-gray-500'}">{stageLabels[currentStage] ?? currentStage}</span
+							>
 						</div>
 					</div>
 				</div>
 
-				{#if legacyBoardEntries.length > 0}
-					<div class="max-h-20 shrink-0 overflow-y-auto border-t px-3 py-2">
-						<p class="mb-1 text-[10px] font-medium text-muted-foreground">Other assignments (legacy)</p>
-						<div class="flex flex-wrap gap-1">
-							{#each legacyBoardEntries as entry (entry.id ?? entry.unitName)}
-								<span class="rounded border px-2 py-0.5 text-[9px] {STATUS_COLORS[entry.status] ?? 'bg-gray-50'}">
-									{entry.division}: {formatUnitAssignmentLine(entry)}
-								</span>
+				<div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t">
+					<div
+						class="flex shrink-0 flex-col gap-1 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+					>
+						<h3 class="text-xs font-semibold">Incident Command Board</h3>
+						<span class="text-[11px] text-muted-foreground sm:text-xs"
+							>{boardEntries.length} assigned &middot; {availableUnits.length} available</span
+						>
+					</div>
+
+					<div class="shrink-0 border-b px-3 py-2">
+						<p
+							class="mb-1.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase"
+						>
+							Available
+						</p>
+						<div class="flex flex-wrap gap-1.5">
+							{#each availableUnits as resource (resource.unitName)}
+								<Badge variant="secondary" class="gap-1 py-0 text-[10px]">
+									<span class="h-1 w-1 rounded-full bg-green-500"></span>
+									{resource.unitName}
+								</Badge>
+							{:else}
+								<span class="text-[10px] text-muted-foreground">All units assigned</span>
 							{/each}
 						</div>
 					</div>
-				{/if}
-			</div>
-		</main>
 
-		<aside class="order-2 flex max-h-[min(40vh,360px)] min-h-[180px] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-background lg:order-none lg:max-h-none lg:min-h-0 lg:w-64 lg:border-l lg:border-t-0">
-			<div class="flex flex-col items-center gap-2 border-b p-3">
-				<h3 class="text-xs font-semibold">Radio — Push to Talk</h3>
-				<button
-					type="button"
-					onpointerdown={onPttPointerDown}
-					onpointerup={onPttPointerUp}
-					onpointercancel={onPttPointerUp}
-					onlostpointercapture={onPttPointerUp}
-					disabled={isProcessing}
-					class="touch-none flex h-16 w-16 select-none items-center justify-center rounded-full border-4 transition-all disabled:cursor-not-allowed disabled:opacity-50 sm:h-14 sm:w-14 {isRecording ? 'border-red-500 bg-red-500 scale-110' : 'border-red-400 bg-red-500/80 hover:bg-red-500'}"
-					aria-label="Push to talk"
-					aria-pressed={isRecording}
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-				</button>
-				<span class="text-[10px] text-muted-foreground">
-					{isArmingMic ? 'Starting mic…' : isRecording ? 'Recording…' : isProcessing ? 'Processing…' : 'Hold to talk'}
-				</span>
-				{#if radioError}
-					<p class="w-full text-center text-[10px] text-destructive" role="alert">{radioError}</p>
-				{/if}
-				{#if lastTranscript}
-					<div class="w-full rounded-lg border bg-muted/50 p-2"><p class="text-[10px] font-medium text-muted-foreground">AI Parsed:</p><p class="mt-0.5 text-xs">{lastTranscript}</p></div>
-				{/if}
-			</div>
-
-			<div class="min-h-0 flex-1 overflow-y-auto p-3">
-				<h3 class="mb-2 text-xs font-semibold">Timeline</h3>
-				<div class="space-y-1.5">
-					{#each timelineEvents as event (event.id)}
-						<div class="flex gap-1.5 text-[11px]">
-							<span class="shrink-0 font-mono text-muted-foreground">{event.time}</span>
-							<Badge
-								variant="outline"
-								class="shrink-0 text-[9px] {event.type === 'SIZE-UP' ? 'border-amber-400 bg-amber-50 text-amber-900' : ''}"
-							>{event.type}</Badge>
-							<span class="overflow-wrap-anywhere">{event.text}</span>
+					<div class="min-h-0 flex-1 overflow-hidden px-1 py-1.5">
+						<div
+							class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1 lg:mx-0 lg:overflow-x-hidden lg:pb-0"
+						>
+							<div class="flex h-full min-h-[120px] w-max gap-0.5 lg:w-full lg:min-w-0">
+								{#each COMMAND_BOARD_COLUMNS as col (col.key)}
+									<div
+										class="flex min-h-0 w-[4.75rem] shrink-0 flex-col border bg-muted/20 sm:w-[5.25rem] lg:w-0 lg:min-w-0 lg:flex-1"
+									>
+										<div
+											class="flex min-h-[2rem] shrink-0 items-center justify-center border-b bg-muted/50 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
+										>
+											{col.header || '\u00a0'}
+										</div>
+										<div class="min-h-0 flex-1 space-y-1 overflow-y-auto p-1">
+											{#each entriesForColumn(boardEntries as BoardEntryLike[], col.key) as entry (entry.id ?? entry.unitName)}
+												<button
+													type="button"
+													onclick={() => openEdit(entry as BoardEntry)}
+													class="w-full rounded border px-1.5 py-1 text-left text-[9px] leading-tight font-medium transition-colors hover:ring-1 hover:ring-primary {STATUS_COLORS[
+														entry.status
+													] ?? 'bg-gray-50 text-gray-700'}"
+													title="Click to fix this entry"
+												>
+													{formatUnitAssignmentLine(entry)}
+													<div class="mt-0.5 text-[8px] opacity-70">{entry.status}</div>
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/each}
+							</div>
 						</div>
-					{/each}
+					</div>
+
+					{#if legacyBoardEntries.length > 0}
+						<div class="max-h-20 shrink-0 overflow-y-auto border-t px-3 py-2">
+							<p class="mb-1 text-[10px] font-medium text-muted-foreground">
+								Other assignments (legacy)
+							</p>
+							<div class="flex flex-wrap gap-1">
+								{#each legacyBoardEntries as entry (entry.id ?? entry.unitName)}
+									<span
+										class="rounded border px-2 py-0.5 text-[9px] {STATUS_COLORS[entry.status] ??
+											'bg-gray-50'}"
+									>
+										{entry.division}: {formatUnitAssignmentLine(entry)}
+									</span>
+								{/each}
+							</div>
+						</div>
+					{/if}
 				</div>
-			</div>
-		</aside>
-	</div>
+			</main>
+
+			<aside
+				class="order-2 flex max-h-[min(40vh,360px)] min-h-[180px] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-background lg:order-none lg:max-h-none lg:min-h-0 lg:w-64 lg:border-t-0 lg:border-l"
+			>
+				<div class="flex flex-col items-center gap-2 border-b p-3">
+					<h3 class="text-xs font-semibold">Radio — Push to Talk</h3>
+					<button
+						type="button"
+						onpointerdown={onPttPointerDown}
+						onpointerup={onPttPointerUp}
+						onpointercancel={onPttPointerUp}
+						onlostpointercapture={onPttPointerUp}
+						disabled={isProcessing}
+						class="flex h-16 w-16 touch-none items-center justify-center rounded-full border-4 transition-all select-none disabled:cursor-not-allowed disabled:opacity-50 sm:h-14 sm:w-14 {isRecording
+							? 'scale-110 border-red-500 bg-red-500'
+							: 'border-red-400 bg-red-500/80 hover:bg-red-500'}"
+						aria-label="Push to talk"
+						aria-pressed={isRecording}
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-5 w-5 text-white"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path
+								d="M19 10v2a7 7 0 0 1-14 0v-2"
+							/><line x1="12" x2="12" y1="19" y2="22" /></svg
+						>
+					</button>
+					<span class="text-[10px] text-muted-foreground">
+						{isArmingMic
+							? 'Starting mic…'
+							: isRecording
+								? 'Recording…'
+								: isProcessing
+									? 'Processing…'
+									: 'Hold to talk'}
+					</span>
+					{#if radioError}
+						<p class="w-full text-center text-[10px] text-destructive" role="alert">{radioError}</p>
+					{/if}
+					{#if lastTranscript}
+						<div class="w-full rounded-lg border bg-muted/50 p-2">
+							<p class="text-[10px] font-medium text-muted-foreground">AI Parsed:</p>
+							<p class="mt-0.5 text-xs">{lastTranscript}</p>
+						</div>
+					{/if}
+				</div>
+
+				<div class="min-h-0 flex-1 overflow-y-auto p-3">
+					<h3 class="mb-2 text-xs font-semibold">Timeline</h3>
+					<div class="space-y-1.5">
+						{#each timelineEvents as event (event.id)}
+							<div class="flex gap-1.5 text-[11px]">
+								<span class="shrink-0 font-mono text-muted-foreground">{event.time}</span>
+								<Badge
+									variant="outline"
+									class="shrink-0 text-[9px] {event.type === 'SIZE-UP'
+										? 'border-amber-400 bg-amber-50 text-amber-900'
+										: ''}">{event.type}</Badge
+								>
+								<span class="overflow-wrap-anywhere">{event.text}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			</aside>
+		</div>
 	{/if}
 
 	{#if editingEntry}
-		<div class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Fix board entry">
-			<button type="button" class="absolute inset-0 bg-black/40" aria-label="Close" onclick={closeEdit}></button>
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center p-4"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Fix board entry"
+		>
+			<button
+				type="button"
+				class="absolute inset-0 bg-black/40"
+				aria-label="Close"
+				onclick={closeEdit}
+			></button>
 			<div class="relative w-full max-w-sm rounded-xl border bg-card p-5 shadow-lg">
 				<h3 class="text-base font-semibold">Fix {editingEntry.unitName}</h3>
-				<p class="mt-1 text-xs text-muted-foreground">Correct the parsed assignment if the radio was misheard.</p>
+				<p class="mt-1 text-xs text-muted-foreground">
+					Correct the parsed assignment if the radio was misheard.
+				</p>
 
 				<div class="mt-4 space-y-3">
 					<div>
 						<label for="edit-division" class="block text-xs font-medium">Division</label>
-						<select id="edit-division" bind:value={editDivision} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+						<select
+							id="edit-division"
+							bind:value={editDivision}
+							class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+						>
 							{#each DIVISION_CHOICES as d (d)}
 								<option value={d}>{d}</option>
 							{/each}
@@ -823,11 +1035,19 @@
 					</div>
 					<div>
 						<label for="edit-assignment" class="block text-xs font-medium">Assignment</label>
-						<input id="edit-assignment" bind:value={editAssignment} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+						<input
+							id="edit-assignment"
+							bind:value={editAssignment}
+							class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+						/>
 					</div>
 					<div>
 						<label for="edit-status" class="block text-xs font-medium">Status</label>
-						<select id="edit-status" bind:value={editStatus} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+						<select
+							id="edit-status"
+							bind:value={editStatus}
+							class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+						>
 							{#each STATUS_CHOICES as s (s)}
 								<option value={s}>{s}</option>
 							{/each}
