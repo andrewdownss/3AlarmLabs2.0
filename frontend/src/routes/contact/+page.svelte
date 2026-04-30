@@ -6,25 +6,25 @@
 	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
 
 	const supportMail =
-		'mailto:support@3alarmlabs.com?subject=' + encodeURIComponent('Support — 3 Alarm Labs');
+		'mailto:support@3alarmlabs.com?subject=' + encodeURIComponent('Support — 3AlarmLabs');
 	const salesMail =
-		'mailto:sales@3alarmlabs.com?subject=' + encodeURIComponent('Sales inquiry — 3 Alarm Labs');
+		'mailto:sales@3alarmlabs.com?subject=' + encodeURIComponent('Sales inquiry — 3AlarmLabs');
 	const privacyMail =
-		'mailto:privacy@3alarmlabs.com?subject=' + encodeURIComponent('Privacy inquiry — 3 Alarm Labs');
+		'mailto:privacy@3alarmlabs.com?subject=' + encodeURIComponent('Privacy inquiry — 3AlarmLabs');
 </script>
 
 <svelte:head>
-	<title>Contact — 3 Alarm Labs</title>
+	<title>Contact — 3AlarmLabs</title>
 	<meta
 		name="description"
-		content="Contact 3 Alarm Labs for sales, support, or privacy questions. Email support@3alarmlabs.com or sales@3alarmlabs.com."
+		content="Contact 3AlarmLabs for sales, support, or privacy questions. Email support@3alarmlabs.com or sales@3alarmlabs.com."
 	/>
 	<link rel="canonical" href="https://3alarmlabs.com/contact" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Contact — 3 Alarm Labs" />
+	<meta property="og:title" content="Contact — 3AlarmLabs" />
 	<meta
 		property="og:description"
-		content="Sales, support, and privacy contact info for 3 Alarm Labs."
+		content="Sales, support, and privacy contact info for 3AlarmLabs."
 	/>
 	<meta property="og:url" content="https://3alarmlabs.com/contact" />
 	<meta name="twitter:card" content="summary_large_image" />

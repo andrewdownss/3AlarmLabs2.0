@@ -29,7 +29,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<void> {
 }
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-	const subject = 'Reset your password — 3 Alarm Labs';
+	const subject = 'Reset your password — 3AlarmLabs';
 	const text = `Click the link below to reset your password:\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`;
 	const html = `
 		<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto;">
@@ -44,11 +44,11 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
 }
 
 export async function sendInviteEmail(to: string, inviteUrl: string, organizationName: string): Promise<void> {
-	const subject = `You're invited to join ${organizationName} on 3 Alarm Labs`;
-	const text = `You've been invited to join ${organizationName} on 3 Alarm Labs.\n\nAccept the invite:\n${inviteUrl}`;
+	const subject = `You're invited to join ${organizationName} on 3AlarmLabs`;
+	const text = `You've been invited to join ${organizationName} on 3AlarmLabs.\n\nAccept the invite:\n${inviteUrl}`;
 	const html = `
 		<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto;">
-			<p style="font-size: 16px; color: #374151;">You've been invited to join <strong>${organizationName}</strong> on 3 Alarm Labs.</p>
+			<p style="font-size: 16px; color: #374151;">You've been invited to join <strong>${organizationName}</strong> on 3AlarmLabs.</p>
 			<p style="margin: 24px 0;">
 				<a href="${inviteUrl}" style="display: inline-block; background-color: #E85D20; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">Accept invite</a>
 			</p>

@@ -9,7 +9,7 @@
 </script>
 
 <svelte:head>
-	<title>Set up organization — 3 Alarm Labs</title>
+	<title>Set up organization — 3AlarmLabs</title>
 </svelte:head>
 
 <div class="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center gap-8 px-4 py-12">

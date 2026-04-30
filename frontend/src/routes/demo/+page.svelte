@@ -8,7 +8,7 @@
 
 	const demoMail =
 		'mailto:sales@3alarmlabs.com?subject=' +
-		encodeURIComponent('Demo request — 3 Alarm Labs') +
+		encodeURIComponent('Demo request — 3AlarmLabs') +
 		'&body=' +
 		encodeURIComponent(
 			'Name:\n' +
@@ -21,17 +21,17 @@
 </script>
 
 <svelte:head>
-	<title>Request a demo — 3 Alarm Labs</title>
+	<title>Request a demo — 3AlarmLabs</title>
 	<meta
 		name="description"
-		content="Book a 30-minute walkthrough of 3 Alarm Labs for your department. See self-paced and instructor-led command training in action."
+		content="Book a 30-minute walkthrough of 3AlarmLabs for your department. See self-paced and instructor-led command training in action."
 	/>
 	<link rel="canonical" href="https://3alarmlabs.com/demo" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Request a demo — 3 Alarm Labs" />
+	<meta property="og:title" content="Request a demo — 3AlarmLabs" />
 	<meta
 		property="og:description"
-		content="Book a 30-minute walkthrough of 3 Alarm Labs for your department."
+		content="Book a 30-minute walkthrough of 3AlarmLabs for your department."
 	/>
 	<meta property="og:url" content="https://3alarmlabs.com/demo" />
 	<meta name="twitter:card" content="summary_large_image" />
@@ -48,7 +48,7 @@
 						Request a demo
 					</p>
 					<h1 class="mt-4 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-						See 3 Alarm Labs for your department.
+						See 3AlarmLabs for your department.
 					</h1>
 					<p class="mt-5 text-base leading-7 text-muted-foreground sm:text-lg">
 						A 30-minute walkthrough covering instructor-led Command sessions, self-paced scenarios

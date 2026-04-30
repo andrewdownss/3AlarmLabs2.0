@@ -14,18 +14,18 @@
 	const individualSignupHref = '/signup?next=%2Fapp%2Fstart-individual';
 
 	const salesMail =
-		'mailto:sales@3alarmlabs.com?subject=' + encodeURIComponent('Pricing question — 3 Alarm Labs');
+		'mailto:andrew@3alarmlabs.com?subject=' + encodeURIComponent('Pricing question — 3AlarmLabs');
 </script>
 
 <svelte:head>
-	<title>Pricing — 3 Alarm Labs</title>
+	<title>Pricing — 3AlarmLabs</title>
 	<meta
 		name="description"
 		content="Weekly self-paced command simulations for individual firefighters at $14.99/month after a 7-day trial. Department plans add instructor-led sessions and shared scenarios."
 	/>
 	<link rel="canonical" href="https://3alarmlabs.com/pricing" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Pricing — 3 Alarm Labs" />
+	<meta property="og:title" content="Pricing — 3AlarmLabs" />
 	<meta
 		property="og:description"
 		content="Weekly self-paced command simulations for individual firefighters at $14.99/month after a 7-day trial."

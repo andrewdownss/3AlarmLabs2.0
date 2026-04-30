@@ -79,7 +79,7 @@
 </script>
 
 <svelte:head>
-	<title>Billing — 3 Alarm Labs</title>
+	<title>Billing — 3AlarmLabs</title>
 </svelte:head>
 
 <div class="mx-auto max-w-4xl px-4 py-10">

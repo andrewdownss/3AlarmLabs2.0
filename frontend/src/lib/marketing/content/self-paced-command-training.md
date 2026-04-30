@@ -1,5 +1,5 @@
 ---
-title: 'Self-Paced Fire Command Training Software for Firefighters | 3 Alarm Labs'
+title: 'Self-Paced Fire Command Training Software for Firefighters | 3AlarmLabs'
 description: 'Practice incident command on your own schedule with self-paced scenarios, radio-based reps, and replay review built for firefighters and acting officers preparing to lead.'
 heroEyebrow: 'Self-paced incident command training'
 heroTitle: 'Self-Paced Fire Command Training Software'

@@ -8,17 +8,17 @@
 </script>
 
 <svelte:head>
-	<title>Privacy Policy — 3 Alarm Labs</title>
+	<title>Privacy Policy — 3AlarmLabs</title>
 	<meta
 		name="description"
-		content="How 3 Alarm Labs collects, uses, and protects data from firefighters and departments using our command training software."
+		content="How 3AlarmLabs collects, uses, and protects data from firefighters and departments using our command training software."
 	/>
 	<link rel="canonical" href="https://3alarmlabs.com/privacy" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Privacy Policy — 3 Alarm Labs" />
+	<meta property="og:title" content="Privacy Policy — 3AlarmLabs" />
 	<meta
 		property="og:description"
-		content="How 3 Alarm Labs collects, uses, and protects data from firefighters and departments."
+		content="How 3AlarmLabs collects, uses, and protects data from firefighters and departments."
 	/>
 	<meta property="og:url" content="https://3alarmlabs.com/privacy" />
 	<meta name="twitter:card" content="summary_large_image" />
@@ -44,14 +44,14 @@
 					class="prose mt-10 max-w-none prose-slate prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-[#E85D20] prose-a:no-underline hover:prose-a:text-[#D4501A] hover:prose-a:underline"
 				>
 					<p>
-						This policy explains what data 3 Alarm Labs collects when you use our command training
-						software, how we use it, and the choices you have. By using 3 Alarm Labs you agree to
+						This policy explains what data 3AlarmLabs collects when you use our command training
+						software, how we use it, and the choices you have. By using 3AlarmLabs you agree to
 						this policy.
 					</p>
 
 					<h2>Who we are</h2>
 					<p>
-						3 Alarm Labs provides fire command training software for individual firefighters,
+						3AlarmLabs provides fire command training software for individual firefighters,
 						departments, academies, and training companies. We are the data controller for
 						information collected through our website and applications.
 					</p>
@@ -142,7 +142,7 @@
 
 					<h2>Children</h2>
 					<p>
-						3 Alarm Labs is intended for professional firefighters and training organizations. It is
+						3AlarmLabs is intended for professional firefighters and training organizations. It is
 						not directed at children under 13 and we do not knowingly collect data from children.
 					</p>
 

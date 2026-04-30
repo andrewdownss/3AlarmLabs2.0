@@ -18,7 +18,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign up — 3 Alarm Labs</title>
+	<title>Sign up — 3AlarmLabs</title>
 </svelte:head>
 
 <div class="pb-safe flex min-h-[100dvh] w-full items-center justify-center px-4 py-6">
@@ -26,7 +26,7 @@
 		<Card.Header>
 			<div class="flex items-center gap-1.5 text-base font-bold tracking-tight">
 				<span class="h-2 w-2 rounded-full bg-[#E85D20]"></span>
-				3 Alarm Labs
+				3AlarmLabs
 			</div>
 			<Card.Title class="text-2xl">Create your account</Card.Title>
 			<Card.Description

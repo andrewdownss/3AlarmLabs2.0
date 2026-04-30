@@ -9,7 +9,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin — 3 Alarm Labs</title>
+	<title>Admin — 3AlarmLabs</title>
 </svelte:head>
 
 <div class="mx-auto max-w-5xl px-4 py-10">

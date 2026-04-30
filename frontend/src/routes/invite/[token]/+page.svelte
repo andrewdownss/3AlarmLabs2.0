@@ -23,7 +23,7 @@
 </script>
 
 <svelte:head>
-	<title>Organization invite — 3 Alarm Labs</title>
+	<title>Organization invite — 3AlarmLabs</title>
 </svelte:head>
 
 <div class="flex min-h-screen w-full items-center justify-center px-4 py-10">

@@ -1,7 +1,7 @@
 import { seoLinks } from '$lib/landing/landing-content';
 import { getMarketingContent } from './marketing-loader';
 
-const BRAND_NAME = '3 Alarm Labs';
+const BRAND_NAME = '3AlarmLabs';
 
 export interface MarketingPageMeta {
 	slug: string; // no leading slash
