@@ -1,4 +1,4 @@
-# Deploying 3 Alarm Labs
+# Deploying 3AlarmLabs
 
 ## Environment variables
 

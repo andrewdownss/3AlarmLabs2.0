@@ -94,10 +94,13 @@ export function getMarketingPageMeta(slug: string): MarketingPageMeta | null {
 
 	const heroEyebrow =
 		fm.heroEyebrow ?? 'Self-paced command training for firefighters preparing to lead';
-	const heroTitle = fm.heroTitle ?? interpolateTemplate('Practice {displayName} on your own time.', vars);
+	const heroTitle =
+		fm.heroTitle ?? interpolateTemplate('Practice {displayName} on your own time.', vars);
 	const heroDescription = fm.heroDescription ?? metaDescription;
 
-	const keywords = Array.isArray(fm.keywords) ? fm.keywords.filter((k): k is string => typeof k === 'string') : [];
+	const keywords = Array.isArray(fm.keywords)
+		? fm.keywords.filter((k): k is string => typeof k === 'string')
+		: [];
 
 	return {
 		slug: normalizedSlug,
