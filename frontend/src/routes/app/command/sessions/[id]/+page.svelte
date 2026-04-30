@@ -34,6 +34,7 @@
 	let hasStarted = $state(false);
 	let isPaused = $state(false);
 	let isStarting = $state(false);
+	let startStatus = $state<'idle' | 'loading-media' | 'starting'>('idle');
 	let lastRadioMessageId = $state<string | null>(null);
 	let isRecording = $state(false);
 	let isArmingMic = $state(false);
@@ -482,7 +483,11 @@
 	async function startSelfPaced() {
 		if (isStarting) return;
 		isStarting = true;
+		startStatus = 'loading-media';
+		radioError = null;
 		try {
+			await warmScenarioMedia();
+			startStatus = 'starting';
 			const resp = await fetch(`/api/trainer/sessions/${data.session.id}/start`, {
 				method: 'POST',
 				credentials: 'include'
@@ -498,6 +503,7 @@
 			isPaused = false;
 		} finally {
 			isStarting = false;
+			startStatus = 'idle';
 		}
 	}
 
@@ -811,9 +817,29 @@
 								</ul>
 							</div>
 						{/if}
-						<Button class="mt-6 min-h-12 w-full" disabled={isStarting} onclick={startSelfPaced}>
-							{isStarting ? 'Starting…' : 'Start Scenario'}
-						</Button>
+						{#if isStarting}
+							<div
+								class="mt-6 rounded-xl border border-primary/20 bg-primary/5 px-4 py-5 text-center dark:bg-primary/10"
+								role="status"
+								aria-live="polite"
+							>
+								<div
+									class="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-muted-foreground/30 border-t-primary"
+								></div>
+								<p class="mt-3 text-sm font-semibold text-foreground">
+									{startStatus === 'loading-media'
+										? 'Loading simulation...'
+										: 'Starting simulation...'}
+								</p>
+								<p class="mt-1 text-xs text-muted-foreground">
+									{startStatus === 'loading-media'
+										? 'Loading scene images and fire/smoke effects so side changes are ready.'
+										: 'Opening the scenario now.'}
+								</p>
+							</div>
+						{:else}
+							<Button class="mt-6 min-h-12 w-full" onclick={startSelfPaced}>Start Scenario</Button>
+						{/if}
 						{#if radioError}
 							<p class="mt-2 text-center text-xs text-destructive">{radioError}</p>
 						{/if}
