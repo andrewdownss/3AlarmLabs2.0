@@ -2,7 +2,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import type { SelfPacedConfig, TimelineEvent } from '$lib/self-paced';
+	import type { AssignmentCompletionRule, SelfPacedConfig, TimelineEvent } from '$lib/self-paced';
 	import {
 		bucketSimpleScenario,
 		rebuildTimelineFromSimpleSections,
@@ -76,6 +76,13 @@
 		config = {
 			...config,
 			timeline: rebuildTimelineFromSimpleSections(nextSections)
+		};
+	}
+
+	function updateActionRules(rules: AssignmentCompletionRule[]) {
+		config = {
+			...config,
+			assignmentCompletions: rules
 		};
 	}
 
@@ -196,6 +203,43 @@
 			...sections,
 			unscheduled: sections.unscheduled.filter((event) => event.id !== id)
 		});
+	}
+
+	function addActionUpdate() {
+		const next: AssignmentCompletionRule = {
+			id: uid('action-update'),
+			label: '',
+			trigger: { unitName: unitOptions[0] ?? '', assignmentContains: '' },
+			delaySeconds: 60,
+			dispatch: { update: '' }
+		};
+		updateActionRules([...config.assignmentCompletions, next]);
+	}
+
+	function removeActionUpdate(id: string) {
+		updateActionRules(config.assignmentCompletions.filter((rule) => rule.id !== id));
+	}
+
+	function updateActionUpdate(id: string, patch: Partial<AssignmentCompletionRule>) {
+		updateActionRules(
+			config.assignmentCompletions.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule))
+		);
+	}
+
+	function updateActionTrigger(id: string, patch: Partial<AssignmentCompletionRule['trigger']>) {
+		updateActionRules(
+			config.assignmentCompletions.map((rule) =>
+				rule.id === id ? { ...rule, trigger: { ...rule.trigger, ...patch } } : rule
+			)
+		);
+	}
+
+	function updateActionDispatch(id: string, patch: Partial<AssignmentCompletionRule['dispatch']>) {
+		updateActionRules(
+			config.assignmentCompletions.map((rule) =>
+				rule.id === id ? { ...rule, dispatch: { ...rule.dispatch, ...patch } } : rule
+			)
+		);
 	}
 
 	function setMinutes(currentSeconds: number | undefined, minutes: string): number {
@@ -389,6 +433,132 @@
 				Add custom arrival
 			</Button>
 		</div>
+	</section>
+
+	<section class="space-y-3 rounded-xl border bg-background p-4">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<div class="flex flex-wrap items-center gap-2">
+					<h5 class="font-semibold">Action updates</h5>
+					<Badge variant="outline">{config.assignmentCompletions.length} rules</Badge>
+				</div>
+				<p class="mt-1 text-xs text-muted-foreground">
+					Trigger a delayed update after a student assigns a unit to a matching task. Example: Truck
+					1 assigned to roof → wait 3 minutes → send a roof update.
+				</p>
+			</div>
+			<Button type="button" size="sm" variant="outline" onclick={addActionUpdate}>
+				+ Add action update
+			</Button>
+		</div>
+
+		{#if config.assignmentCompletions.length === 0}
+			<p
+				class="rounded-lg border-2 border-dashed border-muted-foreground/25 px-4 py-5 text-center text-sm text-muted-foreground"
+			>
+				No action updates yet. Add one for delayed feedback after a unit gets assigned.
+			</p>
+		{:else}
+			<div class="space-y-2">
+				{#each config.assignmentCompletions as rule (rule.id)}
+					<div
+						class="grid gap-2 rounded-lg border bg-muted/15 p-3 xl:grid-cols-[minmax(9rem,12rem)_minmax(10rem,1fr)_auto_auto_minmax(14rem,1.4fr)_auto] xl:items-end"
+					>
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium" for={`action-unit-${rule.id}`}>When unit</label>
+							<select
+								id={`action-unit-${rule.id}`}
+								value={rule.trigger.unitName ?? ''}
+								onchange={(event) =>
+									updateActionTrigger(rule.id, {
+										unitName: (event.currentTarget as HTMLSelectElement).value
+									})}
+								class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+							>
+								<option value="">Any unit</option>
+								{#each unitOptions as unitName (unitName)}
+									<option value={unitName}>{unitName}</option>
+								{/each}
+							</select>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium" for={`action-assignment-${rule.id}`}>
+								Assignment contains
+							</label>
+							<Input
+								id={`action-assignment-${rule.id}`}
+								placeholder="e.g., roof"
+								value={rule.trigger.assignmentContains ?? ''}
+								oninput={(event) =>
+									updateActionTrigger(rule.id, {
+										assignmentContains: (event.currentTarget as HTMLInputElement).value
+									})}
+							/>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium" for={`action-delay-min-${rule.id}`}
+								>After min</label
+							>
+							<Input
+								id={`action-delay-min-${rule.id}`}
+								type="number"
+								min="0"
+								step="1"
+								class="w-20"
+								value={Math.floor((rule.delaySeconds ?? 0) / 60)}
+								oninput={(event) =>
+									updateActionUpdate(rule.id, {
+										delaySeconds: setMinutes(
+											rule.delaySeconds ?? 0,
+											(event.currentTarget as HTMLInputElement).value
+										)
+									})}
+							/>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium" for={`action-delay-sec-${rule.id}`}>Sec</label>
+							<Input
+								id={`action-delay-sec-${rule.id}`}
+								type="number"
+								min="0"
+								max="59"
+								step="1"
+								class="w-20"
+								value={(rule.delaySeconds ?? 0) % 60}
+								oninput={(event) =>
+									updateActionUpdate(rule.id, {
+										delaySeconds: setSeconds(
+											rule.delaySeconds ?? 0,
+											(event.currentTarget as HTMLInputElement).value
+										)
+									})}
+							/>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-xs font-medium" for={`action-update-${rule.id}`}>Send update</label
+							>
+							<Input
+								id={`action-update-${rule.id}`}
+								placeholder="e.g., Truck 1 reports roof opened up"
+								value={rule.dispatch.update ?? ''}
+								oninput={(event) =>
+									updateActionDispatch(rule.id, {
+										update: (event.currentTarget as HTMLInputElement).value
+									})}
+							/>
+						</div>
+						<Button
+							type="button"
+							size="sm"
+							variant="outline"
+							onclick={() => removeActionUpdate(rule.id)}
+						>
+							Remove
+						</Button>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	</section>
 
 	{#each SIMPLE_STAGES as stage (stage.key)}
