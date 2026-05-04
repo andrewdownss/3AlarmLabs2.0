@@ -13,6 +13,10 @@ const config = {
 		alias: {
 			$components: 'src/lib/components',
 			$server: 'src/lib/server'
+		},
+		// Required for PostHog session replay to work correctly with SSR
+		paths: {
+			relative: false
 		}
 	}
 };

@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { auth } from '$lib/auth.js';
 import type { PageServerLoad } from './$types';
 import { safeAppPath } from '$lib/server/safe-path';
+import { getPostHogClient } from '$lib/server/posthog';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (locals.user) {
@@ -31,10 +32,17 @@ export const actions = {
 		} catch (e) {
 			return fail(400, {
 				formError: (e as Error).message || 'Invalid credentials',
-				fieldErrors: { email: ['Check your email/password'], password: ['Check your email/password'] },
+				fieldErrors: {
+					email: ['Check your email/password'],
+					password: ['Check your email/password']
+				},
 				next
 			});
 		}
+
+		const posthog = getPostHogClient();
+		posthog.capture({ distinctId: email, event: 'user_logged_in', properties: { email } });
+		await posthog.flush();
 
 		throw redirect(303, next);
 	}

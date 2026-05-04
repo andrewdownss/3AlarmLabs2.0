@@ -5,6 +5,7 @@
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { PLANS, type BillingInterval, type PlanId } from '$lib/plans';
 	import type { PageData } from './$types';
+	import posthog from 'posthog-js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -54,6 +55,11 @@
 		if (!data.organization?.id) return;
 		const key = `checkout:${planId}:${billingInterval}`;
 		loading = key;
+		posthog.capture('checkout_started', {
+			plan_id: planId,
+			billing_interval: billingInterval,
+			organization_id: data.organization.id
+		});
 		try {
 			const res = await fetch('/api/stripe/checkout', {
 				method: 'POST',
@@ -96,8 +102,8 @@
 			<p
 				class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
 			>
-				Checkout confirmed — your plan is updated below. Use “Manage billing & invoices” in Stripe for
-				payment methods and receipts.
+				Checkout confirmed — your plan is updated below. Use “Manage billing & invoices” in Stripe
+				for payment methods and receipts.
 			</p>
 		{:else if data.checkoutSync === 'failed'}
 			<p
@@ -112,7 +118,9 @@
 				class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
 			>
 				Payment successful — if the plan below doesn’t update, refresh once. For local dev, run
-				<code class="rounded bg-white/60 px-1 font-mono text-xs dark:bg-black/20">stripe listen</code>
+				<code class="rounded bg-white/60 px-1 font-mono text-xs dark:bg-black/20"
+					>stripe listen</code
+				>
 				so webhooks reach your machine; production should use your hosted webhook endpoint.
 			</p>
 		{/if}
@@ -139,7 +147,8 @@
 			{#if data.planConfig.id === 'expired'}
 				<p class="mt-2 text-sm text-muted-foreground">
 					You don’t have an active paid plan yet—“No subscription” is normal until Stripe checkout
-					finishes and this page updates. Former subscribers also see this until they subscribe again.
+					finishes and this page updates. Former subscribers also see this until they subscribe
+					again.
 				</p>
 			{/if}
 			<div class="mt-3 flex flex-wrap items-center gap-2">

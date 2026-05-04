@@ -6,6 +6,7 @@ import { canCreateScene, getPlanConfig, normalizePlanId } from '$lib/plans';
 import { invalidateLayoutCache } from '$lib/server/cache';
 import type { PageServerLoad, Actions } from './$types';
 import crypto from 'node:crypto';
+import { getPostHogClient } from '$lib/server/posthog';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -31,10 +32,7 @@ export const actions: Actions = {
 		const orgId = org?.id;
 		const sceneCountResult = orgId
 			? await db.select({ value: count() }).from(scenes).where(eq(scenes.organizationId, orgId))
-			: await db
-					.select({ value: count() })
-					.from(scenes)
-					.where(eq(scenes.userId, locals.user.id));
+			: await db.select({ value: count() }).from(scenes).where(eq(scenes.userId, locals.user.id));
 
 		const currentCount = sceneCountResult[0]?.value ?? 0;
 
@@ -55,6 +53,16 @@ export const actions: Actions = {
 		});
 
 		invalidateLayoutCache(locals.user.id);
+
+		getPostHogClient().capture({
+			distinctId: locals.user.id,
+			event: 'scene_created',
+			properties: {
+				scene_id: sceneId,
+				scene_title: title,
+				organization_id: orgId ?? null
+			}
+		});
 
 		throw redirect(303, `/app/sizeup/scenes/new/capture?sceneId=${sceneId}`);
 	}

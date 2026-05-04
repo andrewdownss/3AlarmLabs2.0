@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { performLogout } from '$lib/auth-client';
+	import posthog from 'posthog-js';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import HomeIcon from '@lucide/svelte/icons/home';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
@@ -43,6 +44,7 @@
 	});
 
 	async function handleLogout() {
+		posthog.reset();
 		try {
 			await performLogout();
 		} catch (err) {
@@ -95,7 +97,7 @@
 							>
 								{#snippet child({ props })}
 									<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic nav href -->
-								<a href={resolve(item.href as any)} {...props}>
+									<a href={resolve(item.href as any)} {...props}>
 										<item.icon class="h-5 w-5" />
 										<span>{item.label}</span>
 									</a>

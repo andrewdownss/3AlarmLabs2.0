@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { and, count, eq, isNull } from 'drizzle-orm';
 import { organizationMembers, organizations, trainerScenarios } from '$lib/server/db/schema';
 import { canCreateCommandScenario, getPlanConfig, normalizePlanId } from '$lib/plans';
+import { getPostHogClient } from '$lib/server/posthog';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -61,6 +62,16 @@ export const actions: Actions = {
 			address: String(form.get('address') ?? '').trim() || null,
 			occupancyType: String(form.get('occupancyType') ?? '').trim() || null,
 			alarmLevel: String(form.get('alarmLevel') ?? '').trim() || null
+		});
+
+		getPostHogClient().capture({
+			distinctId: locals.user.id,
+			event: 'scenario_created',
+			properties: {
+				scenario_id: id,
+				scenario_title: title,
+				organization_id: organizationId
+			}
 		});
 
 		throw redirect(303, `/app/command/scenarios/${id}`);

@@ -6,6 +6,7 @@ import {
 	applySubscriptionToOrganization,
 	clearSubscriptionForOrganization
 } from '$lib/server/stripe-org-sync';
+import { getPostHogClient } from '$lib/server/posthog';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const signature = request.headers.get('stripe-signature');
@@ -44,6 +45,16 @@ export const POST: RequestHandler = async ({ request }) => {
 				await applySubscriptionToOrganization(orgId, customerId, subscription, {
 					planIdFromCheckoutFlow: session.metadata?.planId
 				});
+				getPostHogClient().capture({
+					distinctId: orgId,
+					event: 'subscription_activated',
+					properties: {
+						plan_id: session.metadata?.planId ?? null,
+						organization_id: orgId,
+						stripe_customer_id: customerId,
+						stripe_subscription_id: subId
+					}
+				});
 				break;
 			}
 			case 'customer.subscription.updated': {
@@ -60,6 +71,14 @@ export const POST: RequestHandler = async ({ request }) => {
 				const orgId = subscription.metadata?.organizationId;
 				if (!orgId) break;
 				await clearSubscriptionForOrganization(orgId, 'expired');
+				getPostHogClient().capture({
+					distinctId: orgId,
+					event: 'subscription_cancelled',
+					properties: {
+						organization_id: orgId,
+						stripe_subscription_id: subscription.id
+					}
+				});
 				break;
 			}
 			default:
