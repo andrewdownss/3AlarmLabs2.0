@@ -29,6 +29,8 @@ export interface TimelineEvent {
 export interface AssignmentMatch {
 	unitName?: string;
 	assignmentContains?: string;
+	unitNames?: string[];
+	assignmentContainsAny?: string[];
 }
 
 export interface ExpectedAction {
@@ -79,9 +81,18 @@ export const dispatchPayloadSchema = z
 export const assignmentMatchSchema = z
 	.object({
 		unitName: z.string().trim().min(1).optional(),
-		assignmentContains: z.string().trim().min(1).optional()
+		assignmentContains: z.string().trim().min(1).optional(),
+		unitNames: z.array(z.string().trim().min(1)).optional(),
+		assignmentContainsAny: z.array(z.string().trim().min(1)).optional()
 	})
-	.refine((m) => m.unitName || m.assignmentContains, 'match requires unitName or assignmentContains');
+	.refine(
+		(m) =>
+			m.unitName ||
+			m.assignmentContains ||
+			(m.unitNames?.length ?? 0) > 0 ||
+			(m.assignmentContainsAny?.length ?? 0) > 0,
+		'match requires unitName, unitNames, assignmentContains, or assignmentContainsAny'
+	);
 
 export const timelineEventSchema = z.object({
 	id: z.string().min(1),
@@ -150,6 +161,17 @@ export function simulationElapsedMs(session: SimulationTimingFields, now: Date =
 
 const norm = (s: string | undefined | null): string => (s ?? '').toLowerCase().trim();
 
+function normalizedMatchers(single: string | undefined, many: string[] | undefined): string[] {
+	const values = new Set<string>();
+	for (const value of many ?? []) {
+		const normalized = norm(value);
+		if (normalized) values.add(normalized);
+	}
+	const normalizedSingle = norm(single);
+	if (normalizedSingle) values.add(normalizedSingle);
+	return [...values];
+}
+
 /**
  * Detects a student "under control" declaration in a radio transcript.
  *
@@ -180,14 +202,21 @@ export function matchesAssignment(
 	rule: AssignmentMatch,
 	candidate: { unitName?: string | null; assignment?: string | null }
 ): boolean {
-	const wantUnit = norm(rule.unitName);
-	const wantAsg = norm(rule.assignmentContains);
-	if (!wantUnit && !wantAsg) return false;
+	const wantUnits = normalizedMatchers(rule.unitName, rule.unitNames);
+	const wantAssignments = normalizedMatchers(rule.assignmentContains, rule.assignmentContainsAny);
+	if (wantUnits.length === 0 && wantAssignments.length === 0) return false;
 
 	const haveUnit = norm(candidate.unitName);
 	const haveAsg = norm(candidate.assignment);
 
-	if (wantUnit && !haveUnit.includes(wantUnit) && haveUnit !== wantUnit) return false;
-	if (wantAsg && !haveAsg.includes(wantAsg)) return false;
+	if (wantUnits.length > 0 && !wantUnits.some((wantUnit) => haveUnit.includes(wantUnit))) {
+		return false;
+	}
+	if (
+		wantAssignments.length > 0 &&
+		!wantAssignments.some((wantAssignment) => haveAsg.includes(wantAssignment))
+	) {
+		return false;
+	}
 	return true;
 }

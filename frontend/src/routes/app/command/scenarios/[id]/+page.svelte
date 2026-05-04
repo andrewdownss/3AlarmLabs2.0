@@ -20,6 +20,7 @@
 	import TimelineEditor from '$lib/components/scene-editor/timeline-editor/TimelineEditor.svelte';
 	import type { PageData } from './$types';
 	import type {
+		AssignmentMatch,
 		AssignmentCompletionRule,
 		ExpectedAction,
 		SelfPacedConfig,
@@ -63,6 +64,7 @@
 	);
 	let selfPacedEnabled = $state(Boolean(initialSelfPacedConfig));
 	let selfPacedConfig = $state<SelfPacedConfig>(initialSelfPacedConfig ?? emptyConfig());
+	let newCompletionPhraseByRule = $state<Record<string, string>>({});
 	let isSavingSelfPaced = $state(false);
 	let selfPacedSaveMsg = $state<string | null>(null);
 	type SelfPacedAuthorMode = 'simple' | 'advanced';
@@ -90,6 +92,16 @@
 	let selfPacedExpectedOpen = $state(false);
 	let selfPacedFollowupsOpen = $state(false);
 	let timelineEditorMode = $state<'visual' | 'list'>('visual');
+
+	const completionUnitOptions = $derived.by(() => {
+		const names = compactStrings([
+			...locallyKnownResourceNames,
+			...getArrivalUnitNames(selfPacedConfig),
+			...selfPacedConfig.expectedActions.flatMap((action) => matchUnitNames(action.match)),
+			...selfPacedConfig.assignmentCompletions.flatMap((rule) => matchUnitNames(rule.trigger))
+		]);
+		return names.sort((a, b) => a.localeCompare(b));
+	});
 
 	$effect(() => {
 		if (!browser) return;
@@ -483,11 +495,72 @@
 		return out;
 	}
 
-	function cleanMatch(m: { unitName?: string; assignmentContains?: string }) {
-		const out: { unitName?: string; assignmentContains?: string } = {};
+	function compactStrings(values: Array<string | undefined> | undefined): string[] {
+		const out: string[] = [];
+		for (const value of values ?? []) {
+			const trimmed = value?.trim();
+			if (trimmed && !out.includes(trimmed)) out.push(trimmed);
+		}
+		return out;
+	}
+
+	function cleanMatch(m: AssignmentMatch): AssignmentMatch {
+		const out: AssignmentMatch = {};
 		if (m.unitName?.trim()) out.unitName = m.unitName.trim();
 		if (m.assignmentContains?.trim()) out.assignmentContains = m.assignmentContains.trim();
+		const unitNames = compactStrings(m.unitNames);
+		if (unitNames.length > 0) out.unitNames = unitNames;
+		const assignmentContainsAny = compactStrings(m.assignmentContainsAny);
+		if (assignmentContainsAny.length > 0) out.assignmentContainsAny = assignmentContainsAny;
 		return out;
+	}
+
+	function matchUnitNames(match: AssignmentMatch): string[] {
+		return compactStrings([match.unitName, ...(match.unitNames ?? [])]);
+	}
+
+	function matchAssignmentPhrases(match: AssignmentMatch): string[] {
+		return compactStrings([match.assignmentContains, ...(match.assignmentContainsAny ?? [])]);
+	}
+
+	function toggleCompletionRuleUnit(
+		rule: AssignmentCompletionRule,
+		unitName: string,
+		isSelected: boolean
+	) {
+		const current = matchUnitNames(rule.trigger);
+		const unitNames = isSelected
+			? compactStrings([...current, unitName])
+			: current.filter((name) => name !== unitName);
+		rule.trigger = {
+			...rule.trigger,
+			unitName: undefined,
+			unitNames: unitNames.length > 0 ? unitNames : undefined
+		};
+	}
+
+	function setNewCompletionPhrase(ruleId: string, value: string) {
+		newCompletionPhraseByRule = { ...newCompletionPhraseByRule, [ruleId]: value };
+	}
+
+	function addCompletionPhrase(rule: AssignmentCompletionRule) {
+		const phrase = newCompletionPhraseByRule[rule.id]?.trim();
+		if (!phrase) return;
+		rule.trigger = {
+			...rule.trigger,
+			assignmentContains: undefined,
+			assignmentContainsAny: compactStrings([...matchAssignmentPhrases(rule.trigger), phrase])
+		};
+		setNewCompletionPhrase(rule.id, '');
+	}
+
+	function removeCompletionPhrase(rule: AssignmentCompletionRule, phrase: string) {
+		const assignmentContainsAny = matchAssignmentPhrases(rule.trigger).filter((item) => item !== phrase);
+		rule.trigger = {
+			...rule.trigger,
+			assignmentContains: undefined,
+			assignmentContainsAny: assignmentContainsAny.length > 0 ? assignmentContainsAny : undefined
+		};
 	}
 
 	async function addResourceName(unitName: string) {
@@ -1753,7 +1826,7 @@
 										Assignment completion follow-ups
 									</h4>
 									<p class="mt-0.5 max-w-xl text-xs text-muted-foreground">
-										Optional delayed dispatches after board matches—expand to add or edit.
+										Optional delayed dispatches after selected units match selected board tasks.
 									</p>
 								</div>
 								<div class="flex shrink-0 items-center gap-2">
@@ -1778,8 +1851,8 @@
 									<p
 										class="rounded-lg border-2 border-dashed border-muted-foreground/25 bg-background px-4 py-6 text-center text-sm text-muted-foreground"
 									>
-										Add a rule to fire an automatic update after a unit lands on the board with the
-										right task.
+										Add a rule to fire an automatic update after Truck 1 or Truck 2 is assigned
+										primary search, cut the roof, or another matching task.
 									</p>
 								{:else}
 									<ul class="mt-4 flex list-none flex-col gap-4 pl-0" role="list">
@@ -1841,27 +1914,86 @@
 																Trigger
 															</p>
 															<div
-																class="grid gap-3 rounded-lg border border-border/80 bg-muted/30 p-3 sm:grid-cols-2 dark:bg-muted/20"
+																class="grid gap-3 rounded-lg border border-border/80 bg-muted/30 p-3 lg:grid-cols-2 dark:bg-muted/20"
 															>
-																<div class="space-y-1.5">
-																	<label class="text-xs font-semibold" for={`ac-unit-${rule.id}`}
-																		>Unit name contains</label
-																	>
-																	<Input
-																		id={`ac-unit-${rule.id}`}
-																		placeholder="e.g., Truck 1"
-																		bind:value={rule.trigger.unitName}
-																	/>
+																<div class="space-y-2">
+																	<p class="text-xs font-semibold">Unit can be</p>
+																	<div class="rounded-md border border-input bg-background p-2">
+																		{#if completionUnitOptions.length === 0}
+																			<p class="text-xs text-muted-foreground">Any unit</p>
+																		{:else}
+																			<div class="max-h-36 space-y-1 overflow-auto">
+																				{#each completionUnitOptions as unitName (unitName)}
+																					<label class="flex items-center gap-2 text-sm">
+																						<input
+																							type="checkbox"
+																							checked={matchUnitNames(rule.trigger).includes(unitName)}
+																							onchange={(e) =>
+																								toggleCompletionRuleUnit(
+																									rule,
+																									unitName,
+																									(e.currentTarget as HTMLInputElement).checked
+																								)}
+																						/>
+																						<span>{unitName}</span>
+																					</label>
+																				{/each}
+																			</div>
+																			{#if matchUnitNames(rule.trigger).length === 0}
+																				<p class="mt-2 text-[11px] text-muted-foreground">
+																					Any unit can trigger this follow-up.
+																				</p>
+																			{/if}
+																		{/if}
+																	</div>
 																</div>
-																<div class="space-y-1.5">
+																<div class="space-y-2">
 																	<label class="text-xs font-semibold" for={`ac-asg-${rule.id}`}
-																		>Assignment contains</label
+																		>Assignment phrases</label
 																	>
-																	<Input
-																		id={`ac-asg-${rule.id}`}
-																		placeholder="e.g., search"
-																		bind:value={rule.trigger.assignmentContains}
-																	/>
+																	<div class="flex gap-2">
+																		<Input
+																			id={`ac-asg-${rule.id}`}
+																			placeholder="e.g., primary search"
+																			value={newCompletionPhraseByRule[rule.id] ?? ''}
+																			oninput={(e) =>
+																				setNewCompletionPhrase(
+																					rule.id,
+																					(e.currentTarget as HTMLInputElement).value
+																				)}
+																			onkeydown={(e) => {
+																				if (e.key !== 'Enter') return;
+																				e.preventDefault();
+																				addCompletionPhrase(rule);
+																			}}
+																		/>
+																		<Button
+																			type="button"
+																			size="sm"
+																			variant="outline"
+																			onclick={() => addCompletionPhrase(rule)}
+																		>
+																			Add
+																		</Button>
+																	</div>
+																	{#if matchAssignmentPhrases(rule.trigger).length === 0}
+																		<p class="text-[11px] text-muted-foreground">
+																			Add phrases like primary search or cut the roof.
+																		</p>
+																	{:else}
+																		<div class="flex flex-wrap gap-1.5">
+																			{#each matchAssignmentPhrases(rule.trigger) as phrase (phrase)}
+																				<button
+																					type="button"
+																					class="rounded-full border bg-background px-2 py-1 text-xs hover:bg-muted"
+																					onclick={() => removeCompletionPhrase(rule, phrase)}
+																					aria-label={`Remove ${phrase}`}
+																				>
+																					{phrase} ×
+																				</button>
+																			{/each}
+																		</div>
+																	{/if}
 																</div>
 															</div>
 														</div>

@@ -20,6 +20,8 @@ export interface TimelineEvent {
 export interface AssignmentMatch {
     unitName?: string;
     assignmentContains?: string;
+    unitNames?: string[];
+    assignmentContainsAny?: string[];
 }
 export interface ExpectedAction {
     id: string;
@@ -78,18 +80,28 @@ export declare const dispatchPayloadSchema: z.ZodEffects<z.ZodObject<{
 export declare const assignmentMatchSchema: z.ZodEffects<z.ZodObject<{
     unitName: z.ZodOptional<z.ZodString>;
     assignmentContains: z.ZodOptional<z.ZodString>;
+    unitNames: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    assignmentContainsAny: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
     unitName?: string | undefined;
     assignmentContains?: string | undefined;
+    unitNames?: string[] | undefined;
+    assignmentContainsAny?: string[] | undefined;
 }, {
     unitName?: string | undefined;
     assignmentContains?: string | undefined;
+    unitNames?: string[] | undefined;
+    assignmentContainsAny?: string[] | undefined;
 }>, {
     unitName?: string | undefined;
     assignmentContains?: string | undefined;
+    unitNames?: string[] | undefined;
+    assignmentContainsAny?: string[] | undefined;
 }, {
     unitName?: string | undefined;
     assignmentContains?: string | undefined;
+    unitNames?: string[] | undefined;
+    assignmentContainsAny?: string[] | undefined;
 }>;
 export declare const timelineEventSchema: z.ZodObject<{
     id: z.ZodString;
@@ -148,18 +160,28 @@ export declare const expectedActionSchema: z.ZodObject<{
     match: z.ZodEffects<z.ZodObject<{
         unitName: z.ZodOptional<z.ZodString>;
         assignmentContains: z.ZodOptional<z.ZodString>;
+        unitNames: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        assignmentContainsAny: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     }, "strip", z.ZodTypeAny, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }>, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }>;
     deadlineSeconds: z.ZodOptional<z.ZodNumber>;
     critical: z.ZodOptional<z.ZodBoolean>;
@@ -169,6 +191,8 @@ export declare const expectedActionSchema: z.ZodObject<{
     match: {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     };
     deadlineSeconds?: number | undefined;
     critical?: boolean | undefined;
@@ -178,6 +202,8 @@ export declare const expectedActionSchema: z.ZodObject<{
     match: {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     };
     deadlineSeconds?: number | undefined;
     critical?: boolean | undefined;
@@ -188,18 +214,28 @@ export declare const assignmentCompletionRuleSchema: z.ZodObject<{
     trigger: z.ZodEffects<z.ZodObject<{
         unitName: z.ZodOptional<z.ZodString>;
         assignmentContains: z.ZodOptional<z.ZodString>;
+        unitNames: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        assignmentContainsAny: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     }, "strip", z.ZodTypeAny, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }>, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }, {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     }>;
     delaySeconds: z.ZodNumber;
     dispatch: z.ZodEffects<z.ZodObject<{
@@ -239,6 +275,8 @@ export declare const assignmentCompletionRuleSchema: z.ZodObject<{
     trigger: {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     };
     delaySeconds: number;
     label?: string | undefined;
@@ -253,6 +291,8 @@ export declare const assignmentCompletionRuleSchema: z.ZodObject<{
     trigger: {
         unitName?: string | undefined;
         assignmentContains?: string | undefined;
+        unitNames?: string[] | undefined;
+        assignmentContainsAny?: string[] | undefined;
     };
     delaySeconds: number;
     label?: string | undefined;
@@ -316,18 +356,28 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         match: z.ZodEffects<z.ZodObject<{
             unitName: z.ZodOptional<z.ZodString>;
             assignmentContains: z.ZodOptional<z.ZodString>;
+            unitNames: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+            assignmentContainsAny: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
         }, "strip", z.ZodTypeAny, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }>, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }>;
         deadlineSeconds: z.ZodOptional<z.ZodNumber>;
         critical: z.ZodOptional<z.ZodBoolean>;
@@ -337,6 +387,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         match: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         deadlineSeconds?: number | undefined;
         critical?: boolean | undefined;
@@ -346,6 +398,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         match: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         deadlineSeconds?: number | undefined;
         critical?: boolean | undefined;
@@ -356,18 +410,28 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         trigger: z.ZodEffects<z.ZodObject<{
             unitName: z.ZodOptional<z.ZodString>;
             assignmentContains: z.ZodOptional<z.ZodString>;
+            unitNames: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+            assignmentContainsAny: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
         }, "strip", z.ZodTypeAny, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }>, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }, {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         }>;
         delaySeconds: z.ZodNumber;
         dispatch: z.ZodEffects<z.ZodObject<{
@@ -407,6 +471,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         trigger: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         delaySeconds: number;
         label?: string | undefined;
@@ -421,6 +487,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         trigger: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         delaySeconds: number;
         label?: string | undefined;
@@ -456,6 +524,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         match: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         deadlineSeconds?: number | undefined;
         critical?: boolean | undefined;
@@ -471,6 +541,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         trigger: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         delaySeconds: number;
         label?: string | undefined;
@@ -500,6 +572,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         match: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         deadlineSeconds?: number | undefined;
         critical?: boolean | undefined;
@@ -515,6 +589,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
         trigger: {
             unitName?: string | undefined;
             assignmentContains?: string | undefined;
+            unitNames?: string[] | undefined;
+            assignmentContainsAny?: string[] | undefined;
         };
         delaySeconds: number;
         label?: string | undefined;

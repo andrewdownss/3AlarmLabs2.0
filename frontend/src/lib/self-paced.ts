@@ -33,6 +33,8 @@ export interface TimelineEvent {
 export interface AssignmentMatch {
 	unitName?: string;
 	assignmentContains?: string;
+	unitNames?: string[];
+	assignmentContainsAny?: string[];
 }
 
 export interface ExpectedAction {
@@ -106,7 +108,18 @@ export function simulationElapsedMs(
 	return Math.max(0, wall - acc - open);
 }
 
-const norm = (s: string | undefined): string => (s ?? '').toLowerCase().trim();
+const norm = (s: string | undefined | null): string => (s ?? '').toLowerCase().trim();
+
+function normalizedMatchers(single: string | undefined, many: string[] | undefined): string[] {
+	const values = new Set<string>();
+	for (const value of many ?? []) {
+		const normalized = norm(value);
+		if (normalized) values.add(normalized);
+	}
+	const normalizedSingle = norm(single);
+	if (normalizedSingle) values.add(normalizedSingle);
+	return [...values];
+}
 
 /**
  * Detects a student "under control" declaration in a radio transcript.
@@ -139,14 +152,21 @@ export function matchesAssignment(
 	rule: AssignmentMatch,
 	candidate: { unitName?: string | null; assignment?: string | null }
 ): boolean {
-	const wantUnit = norm(rule.unitName ?? undefined);
-	const wantAsg = norm(rule.assignmentContains ?? undefined);
-	if (!wantUnit && !wantAsg) return false;
+	const wantUnits = normalizedMatchers(rule.unitName, rule.unitNames);
+	const wantAssignments = normalizedMatchers(rule.assignmentContains, rule.assignmentContainsAny);
+	if (wantUnits.length === 0 && wantAssignments.length === 0) return false;
 
 	const haveUnit = norm(candidate.unitName ?? undefined);
 	const haveAsg = norm(candidate.assignment ?? undefined);
 
-	if (wantUnit && !haveUnit.includes(wantUnit) && haveUnit !== wantUnit) return false;
-	if (wantAsg && !haveAsg.includes(wantAsg)) return false;
+	if (wantUnits.length > 0 && !wantUnits.some((wantUnit) => haveUnit.includes(wantUnit))) {
+		return false;
+	}
+	if (
+		wantAssignments.length > 0 &&
+		!wantAssignments.some((wantAssignment) => haveAsg.includes(wantAssignment))
+	) {
+		return false;
+	}
 	return true;
 }

@@ -2,7 +2,12 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import type { AssignmentCompletionRule, SelfPacedConfig, TimelineEvent } from '$lib/self-paced';
+	import type {
+		AssignmentMatch,
+		AssignmentCompletionRule,
+		SelfPacedConfig,
+		TimelineEvent
+	} from '$lib/self-paced';
 	import {
 		bucketSimpleScenario,
 		rebuildTimelineFromSimpleSections,
@@ -27,6 +32,7 @@
 	let { config = $bindable(), defaultResources }: Props = $props();
 	let sections = $state<SimpleScenarioSections>(bucketSimpleScenario(config));
 	let newUnitName = $state('');
+	let newActionPhraseByRule = $state<Record<string, string>>({});
 
 	const STAGE_LABELS = Object.fromEntries(
 		SIMPLE_STAGES.map((stage) => [stage.key, stage.label])
@@ -46,9 +52,11 @@
 		}
 		for (const action of config.expectedActions) {
 			addName(action.match.unitName);
+			for (const unitName of action.match.unitNames ?? []) addName(unitName);
 		}
 		for (const rule of config.assignmentCompletions) {
 			addName(rule.trigger.unitName);
+			for (const unitName of rule.trigger.unitNames ?? []) addName(unitName);
 		}
 		return names.sort((a, b) => a.localeCompare(b));
 	});
@@ -240,6 +248,63 @@
 				rule.id === id ? { ...rule, dispatch: { ...rule.dispatch, ...patch } } : rule
 			)
 		);
+	}
+
+	function compactStrings(values: Array<string | undefined> | undefined): string[] {
+		const out: string[] = [];
+		for (const value of values ?? []) {
+			const trimmed = value?.trim();
+			if (trimmed && !out.includes(trimmed)) out.push(trimmed);
+		}
+		return out;
+	}
+
+	function matchUnitNames(match: AssignmentMatch): string[] {
+		return compactStrings([match.unitName, ...(match.unitNames ?? [])]);
+	}
+
+	function matchAssignmentPhrases(match: AssignmentMatch): string[] {
+		return compactStrings([match.assignmentContains, ...(match.assignmentContainsAny ?? [])]);
+	}
+
+	function toggleActionUnit(id: string, unitName: string, isSelected: boolean) {
+		const rule = config.assignmentCompletions.find((item) => item.id === id);
+		if (!rule) return;
+		const current = matchUnitNames(rule.trigger);
+		const unitNames = isSelected
+			? compactStrings([...current, unitName])
+			: current.filter((name) => name !== unitName);
+		updateActionTrigger(id, {
+			unitName: undefined,
+			unitNames: unitNames.length > 0 ? unitNames : undefined
+		});
+	}
+
+	function setNewActionPhrase(id: string, value: string) {
+		newActionPhraseByRule = { ...newActionPhraseByRule, [id]: value };
+	}
+
+	function addActionPhrase(id: string) {
+		const phrase = newActionPhraseByRule[id]?.trim();
+		if (!phrase) return;
+		const rule = config.assignmentCompletions.find((item) => item.id === id);
+		if (!rule) return;
+		const assignmentContainsAny = compactStrings([...matchAssignmentPhrases(rule.trigger), phrase]);
+		updateActionTrigger(id, {
+			assignmentContains: undefined,
+			assignmentContainsAny
+		});
+		setNewActionPhrase(id, '');
+	}
+
+	function removeActionPhrase(id: string, phrase: string) {
+		const rule = config.assignmentCompletions.find((item) => item.id === id);
+		if (!rule) return;
+		const assignmentContainsAny = matchAssignmentPhrases(rule.trigger).filter((item) => item !== phrase);
+		updateActionTrigger(id, {
+			assignmentContains: undefined,
+			assignmentContainsAny: assignmentContainsAny.length > 0 ? assignmentContainsAny : undefined
+		});
 	}
 
 	function setMinutes(currentSeconds: number | undefined, minutes: string): number {
@@ -443,8 +508,9 @@
 					<Badge variant="outline">{config.assignmentCompletions.length} rules</Badge>
 				</div>
 				<p class="mt-1 text-xs text-muted-foreground">
-					Trigger a delayed update after a student assigns a unit to a matching task. Example: Truck
-					1 assigned to roof → wait 3 minutes → send a roof update.
+					Trigger a delayed update after a student assigns any selected unit to any selected task.
+					Example: Truck 1 or Truck 2 assigned to primary search or cut the roof → wait 3
+					minutes → send an update.
 				</p>
 			</div>
 			<Button type="button" size="sm" variant="outline" onclick={addActionUpdate}>
@@ -462,38 +528,76 @@
 			<div class="space-y-2">
 				{#each config.assignmentCompletions as rule (rule.id)}
 					<div
-						class="grid gap-2 rounded-lg border bg-muted/15 p-3 xl:grid-cols-[minmax(9rem,12rem)_minmax(10rem,1fr)_auto_auto_minmax(14rem,1.4fr)_auto] xl:items-end"
+						class="grid gap-3 rounded-lg border bg-muted/15 p-3 xl:grid-cols-[minmax(14rem,1fr)_minmax(14rem,1fr)_auto_auto_minmax(14rem,1.4fr)_auto] xl:items-start"
 					>
-						<div class="space-y-1.5">
-							<label class="text-xs font-medium" for={`action-unit-${rule.id}`}>When unit</label>
-							<select
-								id={`action-unit-${rule.id}`}
-								value={rule.trigger.unitName ?? ''}
-								onchange={(event) =>
-									updateActionTrigger(rule.id, {
-										unitName: (event.currentTarget as HTMLSelectElement).value
-									})}
-								class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-							>
-								<option value="">Any unit</option>
-								{#each unitOptions as unitName (unitName)}
-									<option value={unitName}>{unitName}</option>
-								{/each}
-							</select>
+						<div class="space-y-2">
+							<p class="text-xs font-medium">When unit</p>
+							<div class="rounded-md border border-input bg-background p-2">
+								{#if unitOptions.length === 0}
+									<p class="text-xs text-muted-foreground">Any unit</p>
+								{:else}
+									<div class="max-h-32 space-y-1 overflow-auto">
+										{#each unitOptions as unitName (unitName)}
+											<label class="flex items-center gap-2 text-sm">
+												<input
+													type="checkbox"
+													checked={matchUnitNames(rule.trigger).includes(unitName)}
+													onchange={(event) =>
+														toggleActionUnit(
+															rule.id,
+															unitName,
+															(event.currentTarget as HTMLInputElement).checked
+														)}
+												/>
+												<span>{unitName}</span>
+											</label>
+										{/each}
+									</div>
+									{#if matchUnitNames(rule.trigger).length === 0}
+										<p class="mt-2 text-[11px] text-muted-foreground">Any unit can trigger this.</p>
+									{/if}
+								{/if}
+							</div>
 						</div>
-						<div class="space-y-1.5">
+						<div class="space-y-2">
 							<label class="text-xs font-medium" for={`action-assignment-${rule.id}`}>
-								Assignment contains
+								Assignment phrases
 							</label>
-							<Input
-								id={`action-assignment-${rule.id}`}
-								placeholder="e.g., roof"
-								value={rule.trigger.assignmentContains ?? ''}
-								oninput={(event) =>
-									updateActionTrigger(rule.id, {
-										assignmentContains: (event.currentTarget as HTMLInputElement).value
-									})}
-							/>
+							<div class="flex gap-2">
+								<Input
+									id={`action-assignment-${rule.id}`}
+									placeholder="e.g., primary search"
+									value={newActionPhraseByRule[rule.id] ?? ''}
+									oninput={(event) =>
+										setNewActionPhrase(rule.id, (event.currentTarget as HTMLInputElement).value)}
+									onkeydown={(event) => {
+										if (event.key !== 'Enter') return;
+										event.preventDefault();
+										addActionPhrase(rule.id);
+									}}
+								/>
+								<Button type="button" size="sm" variant="outline" onclick={() => addActionPhrase(rule.id)}>
+									Add
+								</Button>
+							</div>
+							{#if matchAssignmentPhrases(rule.trigger).length === 0}
+								<p class="text-[11px] text-muted-foreground">
+									Add at least one phrase, like primary search or cut the roof.
+								</p>
+							{:else}
+								<div class="flex flex-wrap gap-1.5">
+									{#each matchAssignmentPhrases(rule.trigger) as phrase (phrase)}
+										<button
+											type="button"
+											class="rounded-full border bg-background px-2 py-1 text-xs hover:bg-muted"
+											onclick={() => removeActionPhrase(rule.id, phrase)}
+											aria-label={`Remove ${phrase}`}
+										>
+											{phrase} ×
+										</button>
+									{/each}
+								</div>
+							{/if}
 						</div>
 						<div class="space-y-1.5">
 							<label class="text-xs font-medium" for={`action-delay-min-${rule.id}`}

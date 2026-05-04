@@ -66,15 +66,23 @@ async function loadCompletedExpectedIds(sessionId) {
     }
     return out;
 }
-async function loadScheduledRuleIds(sessionId) {
+async function loadScheduledCompletionKeys(sessionId) {
     const rows = await db
-        .select({ ruleId: trainerScheduledEvents.ruleId })
+        .select({
+        ruleId: trainerScheduledEvents.ruleId,
+        payloadJson: trainerScheduledEvents.payloadJson,
+    })
         .from(trainerScheduledEvents)
         .where(and(eq(trainerScheduledEvents.sessionId, sessionId), eq(trainerScheduledEvents.kind, "assignment_completion")));
     const out = new Set();
-    for (const r of rows)
+    for (const r of rows) {
         if (r.ruleId)
             out.add(r.ruleId);
+        const completionKey = r.payloadJson
+            ?.completionKey;
+        if (typeof completionKey === "string")
+            out.add(completionKey);
+    }
     return out;
 }
 /**
@@ -148,12 +156,15 @@ async function fireDueScheduledEvents(io, session, now) {
             .set({ firedAt: new Date() })
             .where(eq(trainerScheduledEvents.id, row.id));
         if (row.kind === "assignment_completion") {
-            const dispatch = row.payloadJson
-                ?.dispatch;
+            const payload = row.payloadJson;
+            const dispatch = payload?.dispatch;
+            const ruleId = typeof payload?.ruleId === "string"
+                ? payload.ruleId
+                : row.ruleId ?? undefined;
             if (dispatch && typeof dispatch === "object") {
                 await applyStateDispatch(io, session.id, dispatch, {
                     source: "completion",
-                    ruleId: row.ruleId ?? undefined,
+                    ruleId,
                 });
             }
         }
@@ -259,23 +270,42 @@ async function markExpectedActionsFromBoard(sessionId, actions, board, elapsedSe
 async function scheduleAssignmentCompletions(sessionId, rules, board, now) {
     if (rules.length === 0 || board.length === 0)
         return;
-    const alreadyScheduled = await loadScheduledRuleIds(sessionId);
+    const alreadyScheduled = await loadScheduledCompletionKeys(sessionId);
     for (const rule of rules) {
+        // Legacy scheduled rows used the authored rule id as the de-dupe key.
         if (alreadyScheduled.has(rule.id))
             continue;
-        const hit = board.find((b) => matchesAssignment(rule.trigger, b));
-        if (!hit)
+        const hits = board.filter((b) => matchesAssignment(rule.trigger, b));
+        if (hits.length === 0)
             continue;
         const fireAt = new Date(now.getTime() + rule.delaySeconds * 1000);
-        await db.insert(trainerScheduledEvents).values({
-            id: crypto.randomUUID(),
-            sessionId,
-            kind: "assignment_completion",
-            ruleId: rule.id,
-            fireAt,
-            payloadJson: { dispatch: rule.dispatch, trigger: hit },
-        });
+        for (const hit of hits) {
+            const completionKey = assignmentCompletionKey(rule.id, hit);
+            if (alreadyScheduled.has(completionKey))
+                continue;
+            await db.insert(trainerScheduledEvents).values({
+                id: crypto.randomUUID(),
+                sessionId,
+                kind: "assignment_completion",
+                ruleId: completionKey,
+                fireAt,
+                payloadJson: {
+                    dispatch: rule.dispatch,
+                    ruleId: rule.id,
+                    completionKey,
+                    trigger: hit,
+                },
+            });
+            alreadyScheduled.add(completionKey);
+        }
     }
+}
+function assignmentCompletionKey(ruleId, hit) {
+    return [
+        ruleId,
+        hit.unitName.trim().toLowerCase(),
+        (hit.assignment ?? "").trim().toLowerCase(),
+    ].join("::");
 }
 /**
  * Idempotent finalize. Safe to call from manual end, timeout, failure,
