@@ -1,12 +1,20 @@
 import { PostHog } from 'posthog-node';
-import { PUBLIC_POSTHOG_PROJECT_TOKEN, PUBLIC_POSTHOG_HOST } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 
 let posthogClient: PostHog | null = null;
 
+const noopPostHogClient = {
+	capture: () => undefined,
+	flush: async () => undefined
+};
+
 export function getPostHogClient() {
+	const token = env.PUBLIC_POSTHOG_PROJECT_TOKEN?.trim();
+	if (!token) return noopPostHogClient;
+
 	if (!posthogClient) {
-		posthogClient = new PostHog(PUBLIC_POSTHOG_PROJECT_TOKEN, {
-			host: PUBLIC_POSTHOG_HOST,
+		posthogClient = new PostHog(token, {
+			host: env.PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
 			flushAt: 1,
 			flushInterval: 0
 		});
