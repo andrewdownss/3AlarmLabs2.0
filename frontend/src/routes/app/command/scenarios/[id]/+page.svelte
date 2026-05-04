@@ -762,17 +762,26 @@
 						<label class="text-sm font-medium" for="side-image-upload">
 							{activeSideConfig.label} Image
 						</label>
-						<div class="flex items-center gap-3">
-							<input
-								id="side-image-upload"
-								type="file"
-								accept="image/*"
-								disabled={uploadingSideField !== null}
-								onchange={(e) => handleImageUpload(activeSideConfig.field, e)}
-								class="text-xs"
-							/>
+						<div class="flex flex-wrap items-center gap-3">
+							<label
+								for="side-image-upload"
+								class="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-lg border-2 border-primary/40 bg-primary/5 px-6 py-3 text-base font-semibold shadow-sm transition-colors hover:border-primary hover:bg-primary/10 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
+								aria-disabled={uploadingSideField !== null}
+								class:pointer-events-none={uploadingSideField !== null}
+								class:opacity-50={uploadingSideField !== null}
+							>
+								Upload image file
+								<input
+									id="side-image-upload"
+									type="file"
+									accept="image/*"
+									class="sr-only"
+									disabled={uploadingSideField !== null}
+									onchange={(e) => handleImageUpload(activeSideConfig.field, e)}
+								/>
+							</label>
 							{#if uploadingSideField === activeSideConfig.field}
-								<Spinner class="h-4 w-4 text-muted-foreground" />
+								<Spinner class="h-5 w-5 text-muted-foreground" />
 							{/if}
 						</div>
 						{#if !activeImageUrl}
