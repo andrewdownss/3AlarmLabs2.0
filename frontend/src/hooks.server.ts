@@ -55,6 +55,21 @@ const authHandle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
+	// Better Auth's `isAuthPath` requires request origin === configured baseURL origin. When
+	// BETTER_AUTH_BASE_URL is apex-only but users hit www (or previews use another host), auth routes
+	// are skipped → POST /api/auth/sign-out resolves as a missing page (404). Route by pathname only.
+	// Default is `/api/auth`; `options.basePath` is omitted from the inferred type but may be set at runtime.
+	const authBase = (
+		(auth.options as { basePath?: string }).basePath ?? '/api/auth'
+	).replace(/\/$/, '') || '/api/auth';
+	const { pathname } = event.url;
+	if (
+		!building &&
+		(pathname === authBase || pathname.startsWith(`${authBase}/`))
+	) {
+		return auth.handler(event.request);
+	}
+
 	return svelteKitHandler({ event, resolve, auth, building });
 };
 

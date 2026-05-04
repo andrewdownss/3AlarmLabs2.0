@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { authClient } from '$lib/auth-client';
+	import { performLogout } from '$lib/auth-client';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import HomeIcon from '@lucide/svelte/icons/home';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
@@ -44,7 +44,7 @@
 
 	async function handleLogout() {
 		try {
-			await authClient.signOut();
+			await performLogout();
 		} catch (err) {
 			console.error('[logout] signOut failed', err);
 		}

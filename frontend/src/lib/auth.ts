@@ -9,6 +9,11 @@ import { getRequestEvent } from '$app/server';
 import { dev } from '$app/environment';
 import { invalidateUserCache } from '$lib/server/cache';
 
+const trustedOriginsExtra =
+	env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',')
+		.map((origin) => origin.trim())
+		.filter(Boolean) ?? [];
+
 export const auth = betterAuth({
 	database: drizzleAdapter(db, { provider: 'pg' }),
 	databaseHooks: {
@@ -37,9 +42,11 @@ export const auth = betterAuth({
 		}
 	},
 	sessions: { strategy: 'database' },
-	// Production: set BETTER_AUTH_BASE_URL to the public site URL. In `vite dev`, omitting baseURL lets
-	// Better Auth use the request origin so /api/auth/* matches even when .env has a different port
-	// (e.g. Docker :3000) than the Vite server (e.g. :5173) — otherwise sign-out returns 404.
+	// Prefer leaving BETTER_AUTH_BASE_URL unset in production so Better Auth derives the origin from
+	// each request (www vs apex, HTTPS, proxies). If set, it MUST exactly match the browser origin or
+	// /api/auth/* won't be routed and CSRF trustedOrigins won't match — sign-out breaks silently.
+	// Extra origins: set BETTER_AUTH_TRUSTED_ORIGINS (comma-separated) per Better Auth docs.
 	baseURL: dev ? undefined : (env.BETTER_AUTH_BASE_URL?.trim() || undefined),
+	...(trustedOriginsExtra.length > 0 ? { trustedOrigins: trustedOriginsExtra } : {}),
 	plugins: [sveltekitCookies(getRequestEvent)]
 });

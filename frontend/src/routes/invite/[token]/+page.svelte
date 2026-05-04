@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { authClient } from '$lib/auth-client';
+	import { performLogout } from '$lib/auth-client';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import type { PageData, ActionData } from './$types';
@@ -13,7 +13,7 @@
 
 	async function signOutAndContinue() {
 		try {
-			await authClient.signOut();
+			await performLogout();
 		} catch (err) {
 			console.error('[logout] signOut failed', err);
 		}
