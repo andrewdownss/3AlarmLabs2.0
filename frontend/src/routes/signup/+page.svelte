@@ -19,6 +19,7 @@
 
 <svelte:head>
 	<title>Sign up — 3AlarmLabs</title>
+	<meta name="robots" content="noindex,nofollow" />
 </svelte:head>
 
 <div class="pb-safe flex min-h-[100dvh] w-full items-center justify-center px-4 py-6">

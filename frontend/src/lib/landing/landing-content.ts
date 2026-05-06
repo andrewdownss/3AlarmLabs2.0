@@ -77,31 +77,32 @@ export const seoLinks: {
 } = {
 	core: [
 		{ label: 'Fire Command Training Software', href: '/fire-command-training-software' },
-		{ label: 'Promotional Prep for Fire Officers', href: '/promotional-prep-fire-officers' },
-		{ label: 'Self-Paced Command Training', href: '/self-paced-command-training' },
+		{ label: 'Firefighter Command Simulation', href: '/firefighter-command-simulation' },
+		{ label: 'Incident Command Simulator', href: '/incident-command-simulator' },
+		{ label: 'Fire Department Training Software', href: '/fire-department-training-software' },
 		{
 			label: 'Incident Command Training for Firefighters',
 			href: '/incident-command-training-for-firefighters'
-		}
+		},
+		{ label: 'Self-Paced Command Training', href: '/self-paced-command-training' }
 	],
 	useCases: [
+		{ label: 'Promotional Prep for Fire Officers', href: '/promotional-prep-fire-officers' },
 		{
 			label: 'Command Training for Acting Officers',
 			href: '/command-training-for-acting-officers'
 		},
+		{ label: 'Fire Officer Training Software', href: '/fire-officer-training-software' },
 		{
 			label: 'Radio Communication Training for Officers',
 			href: '/radio-communication-training-for-officers'
-		},
-		{
-			label: 'After-Action Review for Command Training',
-			href: '/after-action-review-for-command-training'
 		},
 		{ label: 'Practice Incident Command Online', href: '/practice-incident-command-online' }
 	],
 	features: [
 		{ label: 'Push-to-Talk Radio Commands', href: '/push-to-talk-radio-commands' },
 		{ label: 'Command Board Tracking', href: '/command-board-tracking' },
+		{ label: 'After-Action Review Fire Training', href: '/after-action-review-fire-training' },
 		{
 			label: 'Replayable Command Training Sessions',
 			href: '/replayable-command-training-sessions'

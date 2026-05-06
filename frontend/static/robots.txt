@@ -2,5 +2,7 @@ User-agent: *
 Disallow: /app/
 Disallow: /api/
 Disallow: /login
+Disallow: /signup
+Disallow: /invite/
 
 Sitemap: https://3alarmlabs.com/sitemap.xml

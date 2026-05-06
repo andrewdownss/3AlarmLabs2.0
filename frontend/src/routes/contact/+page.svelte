@@ -2,8 +2,13 @@
 	import { LandingFooter, LandingHeader } from '$lib/components/landing';
 	import { Button } from '$lib/components/ui/button';
 	import { PLANS } from '$lib/plans';
+	import { defaultOgImageUrl, organizationJsonLd, toCanonicalUrl, toJsonLd } from '$lib/seo';
 
 	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
+	const pageTitle = 'Contact 3AlarmLabs | Fire Command Training Support and Sales';
+	const pageDescription =
+		'Contact 3AlarmLabs for fire command training software sales, support, privacy questions, department demos, and billing help.';
+	const canonicalUrl = toCanonicalUrl('/contact');
 
 	const supportMail =
 		'mailto:support@3alarmlabs.com?subject=' + encodeURIComponent('Support — 3AlarmLabs');
@@ -14,20 +19,21 @@
 </script>
 
 <svelte:head>
-	<title>Contact — 3AlarmLabs</title>
-	<meta
-		name="description"
-		content="Contact 3AlarmLabs for sales, support, or privacy questions. Email support@3alarmlabs.com or sales@3alarmlabs.com."
-	/>
-	<link rel="canonical" href="https://3alarmlabs.com/contact" />
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDescription} />
+	<link rel="canonical" href={canonicalUrl} />
+	<meta name="robots" content="index,follow" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Contact — 3AlarmLabs" />
-	<meta
-		property="og:description"
-		content="Sales, support, and privacy contact info for 3AlarmLabs."
-	/>
-	<meta property="og:url" content="https://3alarmlabs.com/contact" />
+	<meta property="og:site_name" content="3AlarmLabs" />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDescription} />
+	<meta property="og:url" content={canonicalUrl} />
+	<meta property="og:image" content={defaultOgImageUrl} />
 	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDescription} />
+	<meta name="twitter:image" content={defaultOgImageUrl} />
+	{@html `<script type="application/ld+json">${toJsonLd(organizationJsonLd)}</script>`}
 </svelte:head>
 
 <div class="min-h-screen bg-muted/25 text-foreground">

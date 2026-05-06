@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { PLANS } from '$lib/plans';
 import { getMarketingPageMeta } from '$lib/marketing/marketing-pages';
+import { toCanonicalUrl } from '$lib/seo';
 
 export const load: PageServerLoad = async ({ params, url }) => {
 	const slug = String(params.slug ?? '');
@@ -11,7 +12,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
 
 	return {
-		canonicalUrl: url.origin + url.pathname,
+		canonicalUrl: toCanonicalUrl(url.pathname),
 		monthlyPrice,
 		title: pageMeta.title,
 		description: pageMeta.metaDescription,

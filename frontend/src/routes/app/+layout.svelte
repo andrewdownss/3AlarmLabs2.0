@@ -22,6 +22,10 @@
 	});
 </script>
 
+<svelte:head>
+	<meta name="robots" content="noindex,nofollow" />
+</svelte:head>
+
 {#if isPresentMode}
 	{@render children()}
 {:else}

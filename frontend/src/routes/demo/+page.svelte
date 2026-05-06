@@ -2,9 +2,14 @@
 	import { LandingFooter, LandingHeader } from '$lib/components/landing';
 	import { Button } from '$lib/components/ui/button';
 	import { PLANS } from '$lib/plans';
+	import { defaultOgImageUrl, toCanonicalUrl, toJsonLd } from '$lib/seo';
 
 	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
 	const individualSignupHref = '/signup?next=%2Fapp%2Fstart-individual';
+	const pageTitle = 'Request a Fire Department Training Demo | 3AlarmLabs';
+	const pageDescription =
+		'Book a 30-minute 3AlarmLabs demo for your fire department and see instructor-led command sessions, self-paced scenarios, radio capture, and replay review.';
+	const canonicalUrl = toCanonicalUrl('/demo');
 
 	const demoMail =
 		'mailto:sales@3alarmlabs.com?subject=' +
@@ -18,23 +23,37 @@
 				'Time zones / times that work for a 30-minute demo:\n' +
 				'Anything specific you want to see:'
 		);
+	const demoJsonLd = {
+		'@context': 'https://schema.org',
+		'@type': 'WebPage',
+		name: pageTitle,
+		description: pageDescription,
+		url: canonicalUrl,
+		mainEntity: {
+			'@type': 'SoftwareApplication',
+			name: '3AlarmLabs',
+			applicationCategory: 'EducationalApplication',
+			operatingSystem: 'Web'
+		}
+	};
 </script>
 
 <svelte:head>
-	<title>Request a demo — 3AlarmLabs</title>
-	<meta
-		name="description"
-		content="Book a 30-minute walkthrough of 3AlarmLabs for your department. See self-paced and instructor-led command training in action."
-	/>
-	<link rel="canonical" href="https://3alarmlabs.com/demo" />
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDescription} />
+	<link rel="canonical" href={canonicalUrl} />
+	<meta name="robots" content="index,follow" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Request a demo — 3AlarmLabs" />
-	<meta
-		property="og:description"
-		content="Book a 30-minute walkthrough of 3AlarmLabs for your department."
-	/>
-	<meta property="og:url" content="https://3alarmlabs.com/demo" />
+	<meta property="og:site_name" content="3AlarmLabs" />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDescription} />
+	<meta property="og:url" content={canonicalUrl} />
+	<meta property="og:image" content={defaultOgImageUrl} />
 	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDescription} />
+	<meta name="twitter:image" content={defaultOgImageUrl} />
+	{@html `<script type="application/ld+json">${toJsonLd(demoJsonLd)}</script>`}
 </svelte:head>
 
 <div class="min-h-screen bg-muted/25 text-foreground">

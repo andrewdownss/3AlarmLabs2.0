@@ -93,7 +93,7 @@ No. It improves the debrief by giving people something concrete to review togeth
 
 ## Related pages
 
-- [After Action Review for Command Training](/after-action-review-for-command-training)
+- [After-Action Review Fire Training](/after-action-review-fire-training)
 - [Fire Command Training Software](/fire-command-training-software)
 - [Radio Communication Training for Officers](/radio-communication-training-for-officers)
 - [Command Board Tracking](/command-board-tracking)

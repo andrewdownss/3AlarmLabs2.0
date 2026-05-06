@@ -24,6 +24,7 @@
 
 <svelte:head>
 	<title>Organization invite — 3AlarmLabs</title>
+	<meta name="robots" content="noindex,nofollow" />
 </svelte:head>
 
 <div class="flex min-h-screen w-full items-center justify-center px-4 py-10">

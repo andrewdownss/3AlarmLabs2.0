@@ -1,27 +1,32 @@
 <script lang="ts">
 	import { LandingFooter, LandingHeader } from '$lib/components/landing';
 	import { PLANS } from '$lib/plans';
+	import { defaultOgImageUrl, toCanonicalUrl } from '$lib/seo';
 
 	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
+	const pageTitle = 'Privacy Policy | 3AlarmLabs';
+	const pageDescription =
+		'How 3AlarmLabs collects, uses, and protects data from firefighters and departments using our command training software.';
+	const canonicalUrl = toCanonicalUrl('/privacy');
 
 	const lastUpdated = 'April 21, 2026';
 </script>
 
 <svelte:head>
-	<title>Privacy Policy — 3AlarmLabs</title>
-	<meta
-		name="description"
-		content="How 3AlarmLabs collects, uses, and protects data from firefighters and departments using our command training software."
-	/>
-	<link rel="canonical" href="https://3alarmlabs.com/privacy" />
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDescription} />
+	<link rel="canonical" href={canonicalUrl} />
+	<meta name="robots" content="index,follow" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Privacy Policy — 3AlarmLabs" />
-	<meta
-		property="og:description"
-		content="How 3AlarmLabs collects, uses, and protects data from firefighters and departments."
-	/>
-	<meta property="og:url" content="https://3alarmlabs.com/privacy" />
+	<meta property="og:site_name" content="3AlarmLabs" />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDescription} />
+	<meta property="og:url" content={canonicalUrl} />
+	<meta property="og:image" content={defaultOgImageUrl} />
 	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDescription} />
+	<meta name="twitter:image" content={defaultOgImageUrl} />
 </svelte:head>
 
 <div class="min-h-screen bg-muted/25 text-foreground">

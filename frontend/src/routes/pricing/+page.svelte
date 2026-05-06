@@ -3,6 +3,13 @@
 	import { LandingFooter, LandingHeader } from '$lib/components/landing';
 	import { Button } from '$lib/components/ui/button';
 	import { PLANS } from '$lib/plans';
+	import {
+		defaultOgImageUrl,
+		faqJsonLd,
+		softwareApplicationJsonLd,
+		toCanonicalUrl,
+		toJsonLd
+	} from '$lib/seo';
 
 	const individual = PLANS.individual;
 	const smallFirehouse = PLANS.small_firehouse;
@@ -15,23 +22,86 @@
 
 	const salesMail =
 		'mailto:andrew@3alarmlabs.com?subject=' + encodeURIComponent('Pricing question — 3AlarmLabs');
+	const pageTitle = 'Pricing | Fire Command Training Software | 3AlarmLabs';
+	const pageDescription =
+		'Compare 3AlarmLabs pricing for individual firefighters, fire departments, and training companies. Start self-paced command training at $14.99/month after a 7-day trial.';
+	const canonicalUrl = toCanonicalUrl('/pricing');
+	const pricingFaqItems = [
+		{
+			question: 'Can I try it before paying?',
+			answer:
+				'Yes. Individual starts with a 7-day Stripe trial before the $14.99/month subscription begins.'
+		},
+		{
+			question: 'Do department plans include self-paced training?',
+			answer:
+				'Every department plan includes self-paced Command for every member, plus instructor-led sessions.'
+		},
+		{
+			question: 'How does billing work?',
+			answer: 'Individual plans bill monthly. Department plans bill yearly. Payments are handled by Stripe.'
+		},
+		{
+			question: 'Can I cancel anytime?',
+			answer:
+				'Yes. Cancel from Settings Billing to stop renewals. You keep access until the end of the period.'
+		}
+	];
+	const pricingJsonLd = [
+		softwareApplicationJsonLd(monthlyPrice),
+		{
+			'@context': 'https://schema.org',
+			'@type': 'Product',
+			name: '3AlarmLabs fire command training',
+			description: pageDescription,
+			brand: {
+				'@type': 'Brand',
+				name: '3AlarmLabs'
+			},
+			offers: [
+				{
+					'@type': 'Offer',
+					name: individual.name,
+					price: individual.monthlyPrice?.toFixed(2),
+					priceCurrency: 'USD',
+					url: canonicalUrl
+				},
+				{
+					'@type': 'Offer',
+					name: smallFirehouse.name,
+					price: smallFirehouse.annualPrice?.toFixed(2),
+					priceCurrency: 'USD',
+					url: canonicalUrl
+				},
+				{
+					'@type': 'Offer',
+					name: mediumFirehouse.name,
+					price: mediumFirehouse.annualPrice?.toFixed(2),
+					priceCurrency: 'USD',
+					url: canonicalUrl
+				}
+			]
+		},
+		faqJsonLd(pricingFaqItems)
+	];
 </script>
 
 <svelte:head>
-	<title>Pricing — 3AlarmLabs</title>
-	<meta
-		name="description"
-		content="Weekly self-paced command simulations for individual firefighters at $14.99/month after a 7-day trial. Department plans add instructor-led sessions and shared scenarios."
-	/>
-	<link rel="canonical" href="https://3alarmlabs.com/pricing" />
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDescription} />
+	<link rel="canonical" href={canonicalUrl} />
+	<meta name="robots" content="index,follow" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="Pricing — 3AlarmLabs" />
-	<meta
-		property="og:description"
-		content="Weekly self-paced command simulations for individual firefighters at $14.99/month after a 7-day trial."
-	/>
-	<meta property="og:url" content="https://3alarmlabs.com/pricing" />
+	<meta property="og:site_name" content="3AlarmLabs" />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDescription} />
+	<meta property="og:url" content={canonicalUrl} />
+	<meta property="og:image" content={defaultOgImageUrl} />
 	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDescription} />
+	<meta name="twitter:image" content={defaultOgImageUrl} />
+	{@html `<script type="application/ld+json">${toJsonLd(pricingJsonLd)}</script>`}
 </svelte:head>
 
 <div class="min-h-screen bg-muted/25 text-foreground">

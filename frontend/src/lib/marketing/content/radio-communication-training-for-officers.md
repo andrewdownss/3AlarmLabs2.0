@@ -97,4 +97,4 @@ No. It is useful for experienced officers, newer company officers, and firefight
 - [Incident Command Training for Firefighters](/incident-command-training-for-firefighters)
 - [Replayable Command Training Sessions](/replayable-command-training-sessions)
 - [Push to Talk Radio Commands](/push-to-talk-radio-commands)
-- [After Action Review for Command Training](/after-action-review-for-command-training)
+- [After-Action Review Fire Training](/after-action-review-fire-training)
