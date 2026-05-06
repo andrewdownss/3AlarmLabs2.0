@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 
 	interface Props {
@@ -25,7 +24,7 @@
 			after your trial.
 		</p>
 
-		<div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+		<div class="mt-8 flex flex-col items-center justify-center gap-3">
 			<Button
 				size="lg"
 				class="min-h-11 w-full rounded-none bg-[#E85D20] px-7 text-white hover:bg-[#D4501A] sm:w-auto"
@@ -33,14 +32,7 @@
 			>
 				Start 7-day trial
 			</Button>
-			<Button
-				size="lg"
-				variant="outline"
-				class="min-h-11 w-full rounded-none sm:w-auto"
-				href={resolve('/pricing')}
-			>
-				See ${monthlyPrice}/month pricing
-			</Button>
+			<p class="text-sm text-muted-foreground">${monthlyPrice}/month after trial. Cancel anytime.</p>
 		</div>
 	</div>
 </section>

@@ -23,9 +23,9 @@
 	</a>
 
 	<div class="flex items-center gap-2 sm:gap-3">
-		<Button variant="outline" size="sm" class="rounded-none" href={resolve('/pricing')}>
+		<a href={resolve('/pricing')} class="px-2 text-sm font-medium text-muted-foreground hover:text-foreground">
 			Pricing
-		</Button>
+		</a>
 		<Button
 			size="sm"
 			class="rounded-none bg-[#E85D20] px-4 text-white hover:bg-[#D4501A]"

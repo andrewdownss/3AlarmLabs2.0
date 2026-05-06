@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { proofPoints } from '$lib/landing/landing-content';
 	interface Props {
@@ -10,9 +9,9 @@
 	const individualSignupHref = '/signup?next=%2Fapp%2Fstart-individual';
 </script>
 
-<section class="mx-auto max-w-5xl pt-10 pb-16 text-center sm:pt-16">
+<section class="mx-auto max-w-5xl pt-12 pb-16 text-center sm:pt-20">
 	<div
-		class="mx-auto inline-flex items-center rounded-none border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground shadow-sm"
+		class="mx-auto inline-flex items-center rounded-none border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground"
 	>
 		Self-paced command training for firefighters preparing to lead
 	</div>
@@ -28,36 +27,23 @@
 		firefighters who want to promote and lead with confidence.
 	</p>
 
-	<div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+	<div class="mt-8 flex flex-col items-center justify-center gap-3">
 		<Button
 			size="lg"
-			class="min-h-11 w-full rounded-none bg-[#E85D20] px-6 text-white hover:bg-[#D4501A] sm:w-auto"
+			class="min-h-12 w-full rounded-none bg-[#E85D20] px-8 text-base text-white hover:bg-[#D4501A] sm:w-auto"
 			href={individualSignupHref}
 		>
 			Start 7-day trial
 		</Button>
-		<Button
-			size="lg"
-			variant="outline"
-			class="min-h-11 w-full rounded-none sm:w-auto"
-			href={resolve('/pricing')}
-		>
-			See ${monthlyPrice}/month pricing
-		</Button>
+		<p class="text-sm text-muted-foreground">${monthlyPrice}/month after trial. Cancel anytime.</p>
 	</div>
 
-	<div class="mt-6 flex flex-wrap items-center justify-center gap-2">
-		<div
-			class="rounded-none border border-border bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm"
-		>
-			${monthlyPrice}/month after trial
-		</div>
-		{#each proofPoints as item (item)}
-			<div
-				class="rounded-none border border-border bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm"
-			>
-				{item}
-			</div>
+	<div class="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+		{#each proofPoints as item, index (item)}
+			<span>{item}</span>
+			{#if index < proofPoints.length - 1}
+				<span class="hidden h-1 w-1 rounded-full bg-muted-foreground/35 sm:inline-block"></span>
+			{/if}
 		{/each}
 	</div>
 
