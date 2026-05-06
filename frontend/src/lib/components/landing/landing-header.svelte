@@ -27,6 +27,14 @@
 			Pricing
 		</a>
 		<Button
+			variant="outline"
+			size="sm"
+			class="rounded-none"
+			href={resolve('/login')}
+		>
+			Log in
+		</Button>
+		<Button
 			size="sm"
 			class="rounded-none bg-[#E85D20] px-4 text-white hover:bg-[#D4501A]"
 			href={individualSignupHref}
