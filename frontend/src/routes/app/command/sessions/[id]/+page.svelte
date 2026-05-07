@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { browser } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import * as Sheet from '$lib/components/ui/sheet';
+	import { Input } from '$lib/components/ui/input';
 	import { getTrainerSocket } from '$lib/stores/socket';
 	import OverlayCanvas from '$lib/components/scene-editor/konva-overlay-editor/OverlayCanvas.svelte';
 	import { preloadImages } from '$lib/components/scene-editor/konva-overlay-editor/image-preload';
@@ -21,6 +23,14 @@
 		formatUnitAssignmentLine,
 		type BoardEntryLike
 	} from '$lib/trainer-command-board';
+	import PauseIcon from '@lucide/svelte/icons/pause';
+	import PlayIcon from '@lucide/svelte/icons/play';
+	import MicIcon from '@lucide/svelte/icons/mic';
+	import LayoutGridIcon from '@lucide/svelte/icons/layout-grid';
+	import TruckIcon from '@lucide/svelte/icons/truck';
+	import ListIcon from '@lucide/svelte/icons/list';
+	import ExpandIcon from '@lucide/svelte/icons/maximize-2';
+	import PlusIcon from '@lucide/svelte/icons/plus';
 
 	let { data }: { data: PageData } = $props();
 
@@ -43,6 +53,87 @@
 	let radioError = $state<string | null>(null);
 
 	const isSelfPaced = $derived(Boolean(data.isSelfPaced));
+
+	type MobileTab = 'board' | 'units' | 'timeline';
+	let activeMobileTab = $state<MobileTab>('board');
+	let boardHasNew = $state(false);
+	let timelineHasNew = $state(false);
+
+	let editSheetOpen = $state(false);
+	let endSheetOpen = $state(false);
+	let dispatchSheetOpen = $state(false);
+	let sceneSheetOpen = $state(false);
+	let addDivisionSheetOpen = $state(false);
+
+	let dispatchUnitName = $state('');
+	let dispatchDivision = $state('Div 1');
+	let dispatchAssignment = $state('');
+
+	const ASSIGNMENT_SUGGESTIONS = [
+		'search',
+		'vent',
+		'RIC',
+		'water supply',
+		'pump operations',
+		'attack line',
+		'overhaul',
+		'rehab'
+	];
+
+	let stageBannerText = $state('');
+	let stageBannerVisible = $state(false);
+	let stageBannerTimer: ReturnType<typeof setTimeout> | null = null;
+
+	let transcriptCaptionVisible = $state(false);
+	let transcriptCaptionTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastSeenTranscript = '';
+
+	let timelineFilter = $state<'all' | 'RADIO' | 'STAGE' | 'HAZARD'>('all');
+	let timelineScrollEl: HTMLDivElement | null = $state(null);
+
+	const STATUS_CYCLE = [
+		'Assigned',
+		'En Route',
+		'On Scene',
+		'Operating',
+		'PAR Completed'
+	] as const;
+
+	function nextStatus(current: string): string {
+		const idx = (STATUS_CYCLE as readonly string[]).indexOf(current);
+		if (idx === -1 || idx >= STATUS_CYCLE.length - 1) return STATUS_CYCLE[0];
+		return STATUS_CYCLE[idx + 1];
+	}
+
+	function vibrateLight() {
+		if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+			try {
+				navigator.vibrate(10);
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
+	function showStageBanner(text: string) {
+		stageBannerText = text;
+		stageBannerVisible = true;
+		if (stageBannerTimer) clearTimeout(stageBannerTimer);
+		stageBannerTimer = setTimeout(() => {
+			stageBannerVisible = false;
+		}, 1500);
+	}
+
+	function selectMobileTab(tab: MobileTab) {
+		activeMobileTab = tab;
+		if (tab === 'board') boardHasNew = false;
+		if (tab === 'timeline') {
+			timelineHasNew = false;
+			void tick().then(() => {
+				if (timelineScrollEl) timelineScrollEl.scrollTop = timelineScrollEl.scrollHeight;
+			});
+		}
+	}
 
 	/**
 	 * Plain-English list of how this scenario ends and progresses, built from
@@ -132,6 +223,9 @@
 			assignment: e.assignment ?? '',
 			status: e.status ?? 'Assigned'
 		}));
+		activeMobileTab = boardEntries.length === 0 ? 'units' : 'board';
+		boardHasNew = false;
+		timelineHasNew = false;
 	});
 
 	const availableUnits = $derived(
@@ -154,6 +248,16 @@
 	let timelineEvents = $state<Array<{ id: string; type: string; text: string; time: string }>>([
 		{ id: '0', type: 'START', text: 'Session started', time: '00:00' }
 	]);
+
+	const filteredTimelineEvents = $derived(
+		timelineFilter === 'all'
+			? timelineEvents
+			: timelineEvents.filter((e) =>
+					timelineFilter === 'STAGE'
+						? e.type === 'STAGE' || e.type === 'SIDE'
+						: e.type === timelineFilter
+				)
+	);
 
 	let mediaRecorder: MediaRecorder | null = null;
 	let activeStream: MediaStream | null = null;
@@ -267,6 +371,13 @@
 			...timelineEvents,
 			{ id: crypto.randomUUID(), type, text, time: formatClock(atSeconds) }
 		];
+		if (activeMobileTab !== 'timeline') {
+			timelineHasNew = true;
+		} else {
+			void tick().then(() => {
+				if (timelineScrollEl) timelineScrollEl.scrollTop = timelineScrollEl.scrollHeight;
+			});
+		}
 	}
 
 	async function startRecording() {
@@ -459,8 +570,12 @@
 		window.location.href = resolve(`/app/command/sessions/${data.session.id}/review`);
 	}
 
-	async function endSession() {
-		if (!confirm('End this session?')) return;
+	function endSession() {
+		endSheetOpen = true;
+	}
+
+	async function confirmEndSession() {
+		endSheetOpen = false;
 		addTimelineEvent('END', 'Session ended');
 		const sessionId = data.session.id;
 		if (isSelfPaced) {
@@ -584,10 +699,14 @@
 		editDivision = entry.division;
 		editAssignment = entry.assignment;
 		editStatus = entry.status;
+		editSheetOpen = true;
 	}
 
 	function closeEdit() {
-		editingEntry = null;
+		editSheetOpen = false;
+		setTimeout(() => {
+			editingEntry = null;
+		}, 250);
 	}
 
 	async function saveEdit() {
@@ -598,6 +717,37 @@
 			status: editStatus
 		});
 		closeEdit();
+	}
+
+	async function cycleEntryStatus(entry: BoardEntry) {
+		vibrateLight();
+		const status = nextStatus(entry.status);
+		addTimelineEvent('STATUS', `${entry.unitName} ${status}`);
+		await correctBoardEntry(entry, { status });
+	}
+
+	function openDispatchSheet(unitName: string, division = 'Div 1') {
+		dispatchUnitName = unitName;
+		dispatchDivision = division;
+		dispatchAssignment = '';
+		dispatchSheetOpen = true;
+	}
+
+	async function submitDispatch() {
+		if (!dispatchUnitName) return;
+		const unitName = dispatchUnitName;
+		const division = dispatchDivision;
+		const assignment = dispatchAssignment.trim();
+		const synthetic: BoardEntry = {
+			id: 'pending',
+			unitName,
+			division,
+			assignment,
+			status: 'Assigned'
+		};
+		dispatchSheetOpen = false;
+		await correctBoardEntry(synthetic, { division, assignment, status: 'Assigned' });
+		addTimelineEvent('DISPATCH', `${unitName} → ${division}${assignment ? ` (${assignment})` : ''}`);
 	}
 
 	function joinRoom() {
@@ -633,19 +783,15 @@
 					: sessionSeconds;
 			if (payload.stage) {
 				currentStage = payload.stage;
-				addTimelineEvent(
-					'STAGE',
-					`Stage changed to ${stageLabels[payload.stage] ?? payload.stage}`,
-					eventSeconds
-				);
+				const label = stageLabels[payload.stage] ?? payload.stage;
+				showStageBanner(`Stage: ${label}`);
+				addTimelineEvent('STAGE', `Stage changed to ${label}`, eventSeconds);
 			}
 			if (payload.side) {
 				currentSide = payload.side;
-				addTimelineEvent(
-					'SIDE',
-					`Viewing ${sideLabels[payload.side] ?? payload.side}`,
-					eventSeconds
-				);
+				const label = sideLabels[payload.side] ?? payload.side;
+				showStageBanner(label);
+				addTimelineEvent('SIDE', `Viewing ${label}`, eventSeconds);
 			}
 			if (payload.hazard) addTimelineEvent('HAZARD', payload.hazard, eventSeconds);
 			if (payload.update) addTimelineEvent('UPDATE', payload.update, eventSeconds);
@@ -672,21 +818,35 @@
 					status: entry.status ?? 'Assigned'
 				};
 				boardEntries = [...boardEntries.filter((e) => e.unitName !== mapped.unitName), mapped];
+				if (activeMobileTab !== 'board') boardHasNew = true;
 			}
 		);
 
 		socket?.on('trainer:board:removed', (payload: { unitName: string }) => {
 			boardEntries = boardEntries.filter((e) => e.unitName !== payload.unitName);
+			if (activeMobileTab !== 'board') boardHasNew = true;
 		});
 
 		socket?.on('trainer:board:status-changed', (payload: { unitName: string; status: string }) => {
 			boardEntries = boardEntries.map((e) =>
 				e.unitName === payload.unitName ? { ...e, status: payload.status } : e
 			);
+			if (activeMobileTab !== 'board') boardHasNew = true;
 		});
 
 		socket?.on('connect', joinRoom);
 		joinRoom();
+	});
+
+	$effect(() => {
+		const tx = lastTranscript;
+		if (!tx || tx === lastSeenTranscript) return;
+		lastSeenTranscript = tx;
+		transcriptCaptionVisible = true;
+		if (transcriptCaptionTimer) clearTimeout(transcriptCaptionTimer);
+		transcriptCaptionTimer = setTimeout(() => {
+			transcriptCaptionVisible = false;
+		}, 4000);
 	});
 
 	onDestroy(() => {
@@ -700,6 +860,8 @@
 
 		if (clockInterval) clearInterval(clockInterval);
 		if (tickInterval) clearInterval(tickInterval);
+		if (stageBannerTimer) clearTimeout(stageBannerTimer);
+		if (transcriptCaptionTimer) clearTimeout(transcriptCaptionTimer);
 		socket?.off('connect', joinRoom);
 		socket?.off('trainer:state:dispatched');
 		socket?.off('trainer:session:started');
@@ -718,7 +880,7 @@
 
 <div class="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-background">
 	<header
-		class="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+		class="hidden flex-col gap-3 border-b px-4 py-3 lg:flex lg:flex-row lg:items-center lg:justify-between"
 	>
 		<div class="flex min-w-0 flex-wrap items-center gap-2 gap-y-1.5">
 			<h1 class="max-w-full truncate text-base font-semibold sm:text-lg">{data.scenario.title}</h1>
@@ -761,65 +923,95 @@
 		</div>
 	</header>
 
+	{#if hasStarted}
+		<header
+			class="flex shrink-0 items-center gap-2 border-b bg-background/95 px-3 py-2 backdrop-blur-sm lg:hidden"
+		>
+			<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+				<h1 class="truncate text-sm font-semibold leading-tight">{data.scenario.title}</h1>
+				<div class="flex items-center gap-1.5">
+					<span
+						class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide {isPaused
+							? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+							: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200'}"
+					>
+						<span
+							class="h-1.5 w-1.5 rounded-full {isPaused
+								? 'bg-amber-500'
+								: 'animate-pulse bg-green-500 motion-reduce:animate-none'}"
+						></span>
+						{isPaused ? 'Paused' : 'Live'}
+					</span>
+					<span class="font-mono text-xs tabular-nums text-muted-foreground"
+						>{formatClock(sessionSeconds)}</span
+					>
+					{#if currentStage}
+						<span
+							class="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white {stageBadgeClass[
+								currentStage
+							] ?? 'bg-gray-500'}"
+						>
+							{stageLabels[currentStage] ?? currentStage}
+						</span>
+					{/if}
+				</div>
+			</div>
+			{#if isSelfPaced}
+				{#if isPaused}
+					<button
+						type="button"
+						onclick={resumeSelfPaced}
+						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						aria-label="Resume session"
+					>
+						<PlayIcon class="h-5 w-5" />
+					</button>
+				{:else}
+					<button
+						type="button"
+						onclick={pauseSelfPaced}
+						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						aria-label="Pause session"
+					>
+						<PauseIcon class="h-5 w-5" />
+					</button>
+				{/if}
+			{/if}
+		</header>
+	{/if}
+
 	{#if !hasStarted}
 		{#if isSelfPaced}
 			<div class="flex flex-1 items-start justify-center overflow-y-auto p-4 sm:p-6">
 				<div class="w-full max-w-2xl space-y-4">
-					<div class="rounded-2xl border bg-card p-6 shadow-sm">
-						<h2 class="text-xl font-semibold">{data.scenario.title}</h2>
+					<div class="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+						<h2 class="text-lg font-semibold sm:text-xl">{data.scenario.title}</h2>
 						{#if data.scenario.description}
 							<p class="mt-1 text-sm text-muted-foreground">{data.scenario.description}</p>
-						{/if}
-						{#if data.scenario.dispatchNotes}
-							<div
-								class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-							>
-								<p
-									class="text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-200"
-								>
-									Dispatch notes
-								</p>
-								<p class="mt-1 whitespace-pre-line">{data.scenario.dispatchNotes}</p>
-							</div>
 						{/if}
 						{#if data.scenario.sideAlphaImageUrl}
 							<img
 								src={data.scenario.sideAlphaImageUrl}
 								alt="Initial scene"
-								class="mt-4 h-48 w-full rounded-lg object-cover"
+								class="mt-3 h-40 w-full rounded-lg object-cover sm:h-48"
 							/>
 						{/if}
 						{#if (data.scenario.defaultResources ?? []).length > 0}
-							<div class="mt-4">
-								<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+							<div class="mt-3">
+								<p class="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
 									Available resources
 								</p>
-								<div class="mt-2 flex flex-wrap gap-1.5">
+								<div class="mt-1.5 flex flex-wrap gap-1.5">
 									{#each data.scenario.defaultResources ?? [] as resource (resource.unitName)}
 										<Badge variant="secondary">{resource.unitName}</Badge>
 									{/each}
 								</div>
 							</div>
 						{/if}
-						{#if selfPacedRunHints.length > 0}
-							<div class="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
-								<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-									How this runs
-								</p>
-								<ul class="mt-1.5 space-y-1 text-sm text-foreground">
-									{#each selfPacedRunHints as hint (hint)}
-										<li class="flex gap-2">
-											<span class="text-muted-foreground" aria-hidden="true">•</span><span
-												>{hint}</span
-											>
-										</li>
-									{/each}
-								</ul>
-							</div>
-						{/if}
+
 						{#if isStarting}
 							<div
-								class="mt-6 rounded-xl border border-primary/20 bg-primary/5 px-4 py-5 text-center dark:bg-primary/10"
+								class="mt-5 rounded-xl border border-primary/20 bg-primary/5 px-4 py-5 text-center dark:bg-primary/10"
 								role="status"
 								aria-live="polite"
 							>
@@ -838,11 +1030,58 @@
 								</p>
 							</div>
 						{:else}
-							<Button class="mt-6 min-h-12 w-full" onclick={startSelfPaced}>Start Scenario</Button>
+							<Button class="mt-5 min-h-12 w-full text-base font-semibold" onclick={startSelfPaced}>
+								Start Scenario
+							</Button>
 						{/if}
 						{#if radioError}
 							<p class="mt-2 text-center text-xs text-destructive">{radioError}</p>
 						{/if}
+
+						<div class="mt-4 space-y-2">
+							{#if data.scenario.dispatchNotes}
+								<details
+									class="group rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+								>
+									<summary
+										class="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-200 [&::-webkit-details-marker]:hidden"
+									>
+										<span>Dispatch notes</span>
+										<span
+											class="text-base text-amber-700 transition-transform group-open:rotate-45 dark:text-amber-300"
+											aria-hidden="true">+</span
+										>
+									</summary>
+									<p
+										class="whitespace-pre-line border-t border-amber-200 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:text-amber-100"
+									>
+										{data.scenario.dispatchNotes}
+									</p>
+								</details>
+							{/if}
+							{#if selfPacedRunHints.length > 0}
+								<details class="group rounded-lg border border-border bg-muted/30">
+									<summary
+										class="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase [&::-webkit-details-marker]:hidden"
+									>
+										<span>How this runs</span>
+										<span
+											class="text-base transition-transform group-open:rotate-45"
+											aria-hidden="true">+</span
+										>
+									</summary>
+									<ul class="space-y-1 border-t px-4 py-3 text-sm text-foreground">
+										{#each selfPacedRunHints as hint (hint)}
+											<li class="flex gap-2">
+												<span class="text-muted-foreground" aria-hidden="true">•</span><span
+													>{hint}</span
+												>
+											</li>
+										{/each}
+									</ul>
+								</details>
+							{/if}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -858,7 +1097,7 @@
 			</div>
 		{/if}
 	{:else}
-		<div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+		<div class="hidden min-h-0 flex-1 overflow-hidden lg:flex lg:flex-row">
 			<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-none">
 				<!-- Narrower canvas + page background on sides reduces wide black letterboxing (object-contain). -->
 				<div class="flex shrink-0 justify-center border-b bg-muted/30 px-2 py-2">
@@ -1048,67 +1287,696 @@
 				</div>
 			</aside>
 		</div>
-	{/if}
 
-	{#if editingEntry}
-		<div
-			class="fixed inset-0 z-50 flex items-center justify-center p-4"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Fix board entry"
-		>
-			<button
-				type="button"
-				class="absolute inset-0 bg-black/40"
-				aria-label="Close"
-				onclick={closeEdit}
-			></button>
-			<div class="relative w-full max-w-sm rounded-xl border bg-card p-5 shadow-lg">
-				<h3 class="text-base font-semibold">Fix {editingEntry.unitName}</h3>
-				<p class="mt-1 text-xs text-muted-foreground">
-					Correct the parsed assignment if the radio was misheard.
-				</p>
-
-				<div class="mt-4 space-y-3">
-					<div>
-						<label for="edit-division" class="block text-xs font-medium">Division</label>
-						<select
-							id="edit-division"
-							bind:value={editDivision}
-							class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-						>
-							{#each DIVISION_CHOICES as d (d)}
-								<option value={d}>{d}</option>
-							{/each}
-						</select>
-					</div>
-					<div>
-						<label for="edit-assignment" class="block text-xs font-medium">Assignment</label>
-						<input
-							id="edit-assignment"
-							bind:value={editAssignment}
-							class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+		<!-- Mobile-only post-start layout -->
+		<div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
+			<!-- Scene viewport -->
+			<div class="shrink-0 border-b bg-muted/30 px-2 pb-2 pt-2">
+				<button
+					type="button"
+					onclick={() => (sceneSheetOpen = true)}
+					class="relative block aspect-4/3 w-full overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					aria-label="Expand scene"
+				>
+					{#if currentSideImage && hasOverlays}
+						<div class="pointer-events-none absolute inset-0">
+							<OverlayCanvas
+								baseImageUrl={currentSideImage}
+								overlays={currentOverlays}
+								selectedOverlayId={null}
+								isInteractive={false}
+							/>
+						</div>
+					{:else if currentSideImage}
+						<img
+							src={currentSideImage}
+							alt={sideLabels[currentSide] ?? currentSide}
+							class="pointer-events-none absolute inset-0 h-full w-full object-cover"
 						/>
-					</div>
-					<div>
-						<label for="edit-status" class="block text-xs font-medium">Status</label>
-						<select
-							id="edit-status"
-							bind:value={editStatus}
-							class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+					{:else}
+						<div class="flex h-full w-full items-center justify-center text-muted-foreground">
+							No image for {sideLabels[currentSide] ?? currentSide}
+						</div>
+					{/if}
+
+					{#if currentStage}
+						<span
+							class="pointer-events-none absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow {stageBadgeClass[
+								currentStage
+							] ?? 'bg-gray-500'}"
 						>
-							{#each STATUS_CHOICES as s (s)}
-								<option value={s}>{s}</option>
+							{stageLabels[currentStage] ?? currentStage}
+						</span>
+					{/if}
+
+					<span
+						class="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white"
+					>
+						{sideLabels[currentSide] ?? currentSide}
+					</span>
+
+					<span
+						class="pointer-events-none absolute right-2 bottom-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white"
+						aria-hidden="true"
+					>
+						<ExpandIcon class="h-3.5 w-3.5" />
+					</span>
+
+					{#if stageBannerVisible && stageBannerText}
+						<div
+							class="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-4"
+							aria-live="polite"
+						>
+							<span
+								class="rounded-full bg-black/70 px-4 py-1.5 text-sm font-bold text-white shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
+							>
+								{stageBannerText}
+							</span>
+						</div>
+					{/if}
+				</button>
+			</div>
+
+			<!-- Tab control -->
+			<div class="shrink-0 border-b bg-background px-2 py-1.5">
+				<div class="flex w-full gap-1 rounded-full bg-muted p-1" role="tablist">
+					<button
+						type="button"
+						role="tab"
+						aria-selected={activeMobileTab === 'board'}
+						onclick={() => selectMobileTab('board')}
+						class="relative flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors {activeMobileTab ===
+						'board'
+							? 'bg-background text-foreground shadow-sm'
+							: 'text-muted-foreground hover:text-foreground'}"
+					>
+						<LayoutGridIcon class="h-3.5 w-3.5" />
+						Board
+						{#if boardEntries.length > 0}
+							<span class="text-[10px] text-muted-foreground">({boardEntries.length})</span>
+						{/if}
+						{#if boardHasNew && activeMobileTab !== 'board'}
+							<span
+								class="absolute right-2 top-1.5 h-1.5 w-1.5 rounded-full bg-primary"
+								aria-label="New activity"
+							></span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={activeMobileTab === 'units'}
+						onclick={() => selectMobileTab('units')}
+						class="relative flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors {activeMobileTab ===
+						'units'
+							? 'bg-background text-foreground shadow-sm'
+							: 'text-muted-foreground hover:text-foreground'}"
+					>
+						<TruckIcon class="h-3.5 w-3.5" />
+						Units
+						{#if availableUnits.length > 0}
+							<span class="text-[10px] text-muted-foreground">({availableUnits.length})</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={activeMobileTab === 'timeline'}
+						onclick={() => selectMobileTab('timeline')}
+						class="relative flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors {activeMobileTab ===
+						'timeline'
+							? 'bg-background text-foreground shadow-sm'
+							: 'text-muted-foreground hover:text-foreground'}"
+					>
+						<ListIcon class="h-3.5 w-3.5" />
+						Timeline
+						{#if timelineHasNew && activeMobileTab !== 'timeline'}
+							<span
+								class="absolute right-2 top-1.5 h-1.5 w-1.5 rounded-full bg-primary"
+								aria-label="New activity"
+							></span>
+						{/if}
+					</button>
+				</div>
+			</div>
+
+			<!-- Tab content -->
+			<div class="min-h-0 flex-1 overflow-hidden">
+				<!-- Board tab -->
+				<div
+					role="tabpanel"
+					aria-label="Command board"
+					class="h-full overflow-y-auto px-3 py-3 {activeMobileTab === 'board' ? '' : 'hidden'}"
+				>
+					{#if boardEntries.length === 0}
+						<div
+							class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center"
+						>
+							<TruckIcon class="h-8 w-8 text-muted-foreground" />
+							<p class="mt-3 text-sm font-medium text-foreground">No units assigned yet</p>
+							<p class="mt-1 text-xs text-muted-foreground">
+								Use the radio to dispatch units, or assign one manually.
+							</p>
+							<Button
+								size="sm"
+								class="mt-4 min-h-10"
+								onclick={() => selectMobileTab('units')}
+							>
+								<TruckIcon class="h-4 w-4" /> Go to units
+							</Button>
+						</div>
+					{:else}
+						<div class="space-y-3">
+							{#each COMMAND_BOARD_COLUMNS as col (col.key)}
+								{@const colEntries = entriesForColumn(boardEntries as BoardEntryLike[], col.key)}
+								{#if colEntries.length > 0}
+									<div class="overflow-hidden rounded-xl border bg-card">
+										<div
+											class="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5"
+										>
+											<span
+												class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
+											>
+												{col.header || col.key}
+											</span>
+											<span class="text-[10px] text-muted-foreground"
+												>{colEntries.length} unit{colEntries.length === 1 ? '' : 's'}</span
+											>
+										</div>
+										<ul class="divide-y">
+											{#each colEntries as entry (entry.id ?? entry.unitName)}
+												<li class="flex items-stretch">
+													<button
+														type="button"
+														onclick={() => openEdit(entry as BoardEntry)}
+														class="flex min-h-12 flex-1 items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+														aria-label="Fix {entry.unitName}"
+													>
+														<div class="min-w-0 flex-1">
+															<p class="truncate text-sm font-medium">{entry.unitName}</p>
+															{#if entry.assignment}
+																<p class="truncate text-xs text-muted-foreground">
+																	{entry.assignment}
+																</p>
+															{/if}
+														</div>
+													</button>
+													<button
+														type="button"
+														onclick={() => cycleEntryStatus(entry as BoardEntry)}
+														class="m-1.5 flex min-h-9 items-center rounded-full px-2.5 text-[11px] font-semibold transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {STATUS_COLORS[
+															entry.status
+														] ?? 'bg-gray-50 text-gray-700'}"
+														aria-label="Change status (currently {entry.status})"
+													>
+														{entry.status}
+													</button>
+												</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
 							{/each}
-						</select>
-					</div>
+
+							<button
+								type="button"
+								onclick={() => (addDivisionSheetOpen = true)}
+								class="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								<PlusIcon class="h-4 w-4" /> Add to a division
+							</button>
+
+							{#if legacyBoardEntries.length > 0}
+								<div class="rounded-xl border bg-muted/20 p-3">
+									<p class="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+										Other assignments
+									</p>
+									<div class="flex flex-wrap gap-1.5">
+										{#each legacyBoardEntries as entry (entry.id ?? entry.unitName)}
+											<span
+												class="rounded-full border px-2 py-0.5 text-[10px] {STATUS_COLORS[
+													entry.status
+												] ?? 'bg-gray-50'}"
+											>
+												{entry.division}: {formatUnitAssignmentLine(entry)}
+											</span>
+										{/each}
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
 				</div>
 
-				<div class="mt-5 flex justify-end gap-2">
-					<Button variant="outline" size="sm" onclick={closeEdit}>Cancel</Button>
-					<Button size="sm" onclick={saveEdit}>Save</Button>
+				<!-- Units tab -->
+				<div
+					role="tabpanel"
+					aria-label="Available units"
+					class="h-full overflow-y-auto px-3 py-3 {activeMobileTab === 'units' ? '' : 'hidden'}"
+				>
+					<div class="mb-3">
+						<p class="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+							Available ({availableUnits.length})
+						</p>
+						{#if availableUnits.length === 0}
+							<div
+								class="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground"
+							>
+								All units are assigned.
+							</div>
+						{:else}
+							<div class="grid grid-cols-2 gap-2">
+								{#each availableUnits as resource (resource.unitName)}
+									<button
+										type="button"
+										onclick={() => openDispatchSheet(resource.unitName)}
+										class="flex min-h-14 items-center gap-2 rounded-xl border bg-card px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									>
+										<span class="h-2 w-2 rounded-full bg-green-500" aria-hidden="true"></span>
+										<span class="flex-1 truncate text-sm font-medium">{resource.unitName}</span>
+										<PlusIcon class="h-4 w-4 text-muted-foreground" />
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+					{#if boardEntries.length > 0}
+						<div>
+							<p
+								class="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+							>
+								Assigned ({boardEntries.length})
+							</p>
+							<div class="grid grid-cols-2 gap-2">
+								{#each boardEntries as entry (entry.id)}
+									<button
+										type="button"
+										onclick={() => openEdit(entry)}
+										class="flex min-h-14 flex-col items-start gap-0.5 rounded-xl border bg-card px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									>
+										<div class="flex w-full items-center gap-1.5">
+											<span class="flex-1 truncate text-sm font-medium">{entry.unitName}</span>
+										</div>
+										<span class="truncate text-[10px] text-muted-foreground">
+											{entry.division}{entry.assignment ? ` · ${entry.assignment}` : ''}
+										</span>
+										<span
+											class="mt-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold {STATUS_COLORS[
+												entry.status
+											] ?? 'bg-gray-50 text-gray-700'}"
+										>
+											{entry.status}
+										</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Timeline tab -->
+				<div
+					role="tabpanel"
+					aria-label="Timeline"
+					class="flex h-full flex-col {activeMobileTab === 'timeline' ? '' : 'hidden'}"
+				>
+					<div class="flex shrink-0 gap-1.5 border-b bg-background px-3 py-2">
+						{#each [{ id: 'all', label: 'All' }, { id: 'RADIO', label: 'Radio' }, { id: 'STAGE', label: 'Stage' }, { id: 'HAZARD', label: 'Hazard' }] as f (f.id)}
+							<button
+								type="button"
+								onclick={() => (timelineFilter = f.id as typeof timelineFilter)}
+								class="rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors {timelineFilter ===
+								f.id
+									? 'bg-foreground text-background'
+									: 'bg-muted text-muted-foreground hover:bg-muted/70'}"
+							>
+								{f.label}
+							</button>
+						{/each}
+					</div>
+					<div bind:this={timelineScrollEl} class="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+						{#if filteredTimelineEvents.length === 0}
+							<p class="py-8 text-center text-xs text-muted-foreground">No events to show.</p>
+						{:else}
+							<ul class="space-y-1.5">
+								{#each filteredTimelineEvents as event, i (event.id)}
+									<li
+										class="flex gap-2 rounded-lg border-l-2 px-2 py-1.5 text-xs {i ===
+										filteredTimelineEvents.length - 1
+											? 'border-primary bg-primary/5'
+											: 'border-transparent'}"
+									>
+										<span class="shrink-0 pt-0.5 font-mono text-[10px] text-muted-foreground"
+											>{event.time}</span
+										>
+										<Badge
+											variant="outline"
+											class="shrink-0 text-[9px] {event.type === 'SIZE-UP'
+												? 'border-amber-400 bg-amber-50 text-amber-900'
+												: ''}"
+										>
+											{event.type}
+										</Badge>
+										<span class="wrap-break-word text-[12px] leading-snug">{event.text}</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+				</div>
+			</div>
+
+			<!-- Sticky PTT footer -->
+			<div
+				class="shrink-0 border-t bg-background/95 px-3 pt-2 backdrop-blur-sm"
+				style="padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);"
+			>
+				{#if radioError}
+					<div
+						role="alert"
+						class="mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive"
+					>
+						{radioError}
+					</div>
+				{/if}
+
+				{#if transcriptCaptionVisible && lastTranscript}
+					<p
+						class="mb-1.5 truncate text-center text-[11px] text-muted-foreground transition-opacity"
+						aria-live="polite"
+					>
+						<span class="font-medium text-foreground">Heard:</span>
+						"{lastTranscript}"
+					</p>
+				{/if}
+
+				<div class="flex items-center justify-between gap-3">
+					<div class="w-16 shrink-0"></div>
+					<div class="flex flex-col items-center">
+						<button
+							type="button"
+							onpointerdown={onPttPointerDown}
+							onpointerup={onPttPointerUp}
+							onpointercancel={onPttPointerUp}
+							onlostpointercapture={onPttPointerUp}
+							disabled={isProcessing}
+							class="relative flex h-[72px] w-[72px] touch-none items-center justify-center rounded-full text-white transition-all select-none disabled:cursor-not-allowed disabled:opacity-60 {isRecording
+								? 'scale-105 bg-red-600 ring-4 ring-red-300 motion-safe:animate-pulse'
+								: 'bg-red-500 ring-2 ring-red-200 hover:bg-red-600 active:scale-95'}"
+							aria-label="Push to talk"
+							aria-pressed={isRecording}
+						>
+							{#if isProcessing}
+								<span
+									class="h-6 w-6 animate-spin rounded-full border-2 border-white/40 border-t-white"
+									aria-hidden="true"
+								></span>
+							{:else}
+								<MicIcon class="h-7 w-7" />
+							{/if}
+						</button>
+						<span class="mt-0.5 text-[10px] font-medium text-muted-foreground">
+							{isArmingMic
+								? 'Starting…'
+								: isRecording
+									? 'Recording…'
+									: isProcessing
+										? 'Processing…'
+										: 'Hold to talk'}
+						</span>
+					</div>
+					<div class="flex w-16 shrink-0 justify-end">
+						<Button
+							variant="destructive"
+							size="sm"
+							class="min-h-11"
+							onclick={endSession}
+						>
+							End
+						</Button>
+					</div>
 				</div>
 			</div>
 		</div>
 	{/if}
+
+	<!-- Edit board entry sheet -->
+	<Sheet.Root
+		bind:open={editSheetOpen}
+		onOpenChange={(o) => {
+			if (!o) closeEdit();
+		}}
+	>
+		<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+			<Sheet.Header class="text-left">
+				<Sheet.Title class="text-base">
+					Fix {editingEntry?.unitName ?? 'entry'}
+				</Sheet.Title>
+				<Sheet.Description class="text-xs">
+					Correct the parsed assignment if the radio was misheard.
+				</Sheet.Description>
+			</Sheet.Header>
+			<div class="space-y-3 px-4">
+				<div>
+					<label for="edit-division" class="mb-1 block text-xs font-medium">Division</label>
+					<div class="flex flex-wrap gap-1.5">
+						{#each DIVISION_CHOICES as d (d)}
+							<button
+								type="button"
+								onclick={() => (editDivision = d)}
+								class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editDivision ===
+								d
+									? 'border-primary bg-primary text-primary-foreground'
+									: 'bg-background hover:bg-muted'}"
+							>
+								{d}
+							</button>
+						{/each}
+					</div>
+				</div>
+				<div>
+					<label for="edit-assignment" class="mb-1 block text-xs font-medium">Assignment</label>
+					<Input id="edit-assignment" bind:value={editAssignment} class="h-11" />
+				</div>
+				<div>
+					<label for="edit-status" class="mb-1 block text-xs font-medium">Status</label>
+					<div class="flex flex-wrap gap-1.5">
+						{#each STATUS_CHOICES as s (s)}
+							<button
+								type="button"
+								onclick={() => (editStatus = s)}
+								class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editStatus ===
+								s
+									? `border-transparent ${STATUS_COLORS[s] ?? 'bg-foreground text-background'}`
+									: 'bg-background hover:bg-muted'}"
+							>
+								{s}
+							</button>
+						{/each}
+					</div>
+				</div>
+			</div>
+			<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pb-2 pt-0">
+				<Button variant="outline" size="sm" class="min-h-10" onclick={closeEdit}>Cancel</Button>
+				<Button size="sm" class="min-h-10" onclick={saveEdit}>Save</Button>
+			</Sheet.Footer>
+		</Sheet.Content>
+	</Sheet.Root>
+
+	<!-- End session confirmation sheet -->
+	<Sheet.Root bind:open={endSheetOpen}>
+		<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+			<Sheet.Header class="text-left">
+				<Sheet.Title class="text-base">End this session?</Sheet.Title>
+				<Sheet.Description class="text-xs">
+					You'll be taken to the review page. You can't restart this run.
+				</Sheet.Description>
+			</Sheet.Header>
+			<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pb-2 pt-0">
+				<Button
+					variant="outline"
+					size="sm"
+					class="min-h-10"
+					onclick={() => (endSheetOpen = false)}
+				>
+					Keep going
+				</Button>
+				<Button variant="destructive" size="sm" class="min-h-10" onclick={confirmEndSession}>
+					End session
+				</Button>
+			</Sheet.Footer>
+		</Sheet.Content>
+	</Sheet.Root>
+
+	<!-- Quick dispatch sheet -->
+	<Sheet.Root bind:open={dispatchSheetOpen}>
+		<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+			<Sheet.Header class="text-left">
+				<Sheet.Title class="text-base">Dispatch {dispatchUnitName}</Sheet.Title>
+				<Sheet.Description class="text-xs">
+					Pick a division and assignment.
+				</Sheet.Description>
+			</Sheet.Header>
+			<div class="space-y-3 px-4">
+				<div>
+					<p class="mb-1 text-xs font-medium">Division</p>
+					<div class="flex flex-wrap gap-1.5">
+						{#each DIVISION_CHOICES as d (d)}
+							<button
+								type="button"
+								onclick={() => (dispatchDivision = d)}
+								class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {dispatchDivision ===
+								d
+									? 'border-primary bg-primary text-primary-foreground'
+									: 'bg-background hover:bg-muted'}"
+							>
+								{d}
+							</button>
+						{/each}
+					</div>
+				</div>
+				<div>
+					<label for="dispatch-assignment" class="mb-1 block text-xs font-medium">Assignment</label
+					>
+					<Input
+						id="dispatch-assignment"
+						bind:value={dispatchAssignment}
+						placeholder="e.g., search, vent, RIC"
+						class="h-11"
+					/>
+					<div class="mt-1.5 flex flex-wrap gap-1.5">
+						{#each ASSIGNMENT_SUGGESTIONS as s (s)}
+							<button
+								type="button"
+								onclick={() => (dispatchAssignment = s)}
+								class="min-h-8 rounded-full border bg-background px-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+							>
+								{s}
+							</button>
+						{/each}
+					</div>
+				</div>
+			</div>
+			<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pb-2 pt-0">
+				<Button
+					variant="outline"
+					size="sm"
+					class="min-h-10"
+					onclick={() => (dispatchSheetOpen = false)}>Cancel</Button
+				>
+				<Button size="sm" class="min-h-10" onclick={submitDispatch}>Dispatch</Button>
+			</Sheet.Footer>
+		</Sheet.Content>
+	</Sheet.Root>
+
+	<!-- Add to division sheet (mobile board "+ Add division") -->
+	<Sheet.Root bind:open={addDivisionSheetOpen}>
+		<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+			<Sheet.Header class="text-left">
+				<Sheet.Title class="text-base">Add a unit to a division</Sheet.Title>
+				<Sheet.Description class="text-xs">
+					Pick a division, then choose an available unit to dispatch.
+				</Sheet.Description>
+			</Sheet.Header>
+			<div class="space-y-3 px-4">
+				{#if availableUnits.length === 0}
+					<p class="rounded-md border bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
+						All units are already assigned.
+					</p>
+				{:else}
+					<div>
+						<p class="mb-1 text-xs font-medium">Division</p>
+						<div class="flex flex-wrap gap-1.5">
+							{#each DIVISION_CHOICES as d (d)}
+								<button
+									type="button"
+									onclick={() => (dispatchDivision = d)}
+									class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {dispatchDivision ===
+									d
+										? 'border-primary bg-primary text-primary-foreground'
+										: 'bg-background hover:bg-muted'}"
+								>
+									{d}
+								</button>
+							{/each}
+						</div>
+					</div>
+					<div>
+						<p class="mb-1 text-xs font-medium">Available units</p>
+						<div class="grid grid-cols-2 gap-2">
+							{#each availableUnits as resource (resource.unitName)}
+								<button
+									type="button"
+									onclick={() => {
+										addDivisionSheetOpen = false;
+										openDispatchSheet(resource.unitName, dispatchDivision);
+									}}
+									class="flex min-h-12 items-center gap-2 rounded-lg border bg-background px-3 text-left text-sm transition-colors hover:bg-muted"
+								>
+									<span class="h-2 w-2 rounded-full bg-green-500" aria-hidden="true"></span>
+									<span class="truncate">{resource.unitName}</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
+			<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pb-2 pt-0">
+				<Button
+					variant="outline"
+					size="sm"
+					class="min-h-10"
+					onclick={() => (addDivisionSheetOpen = false)}>Close</Button
+				>
+			</Sheet.Footer>
+		</Sheet.Content>
+	</Sheet.Root>
+
+	<!-- Full-scene viewer sheet -->
+	<Sheet.Root bind:open={sceneSheetOpen}>
+		<Sheet.Content
+			side="bottom"
+			class="h-[92dvh] rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]"
+		>
+			<Sheet.Header class="text-left">
+				<Sheet.Title class="text-base">
+					{sideLabels[currentSide] ?? currentSide}
+					{#if currentStage}
+						<span
+							class="ml-2 rounded-full px-2 py-0.5 align-middle text-[10px] font-bold uppercase text-white {stageBadgeClass[
+								currentStage
+							] ?? 'bg-gray-500'}"
+						>
+							{stageLabels[currentStage] ?? currentStage}
+						</span>
+					{/if}
+				</Sheet.Title>
+			</Sheet.Header>
+			<div class="min-h-0 flex-1 overflow-hidden px-3 pb-3">
+				<div class="relative h-full w-full overflow-hidden rounded-lg bg-muted">
+					{#if currentSideImage && hasOverlays}
+						<div class="absolute inset-0">
+							<OverlayCanvas
+								baseImageUrl={currentSideImage}
+								overlays={currentOverlays}
+								selectedOverlayId={null}
+								isInteractive={false}
+							/>
+						</div>
+					{:else if currentSideImage}
+						<img
+							src={currentSideImage}
+							alt={sideLabels[currentSide] ?? currentSide}
+							class="absolute inset-0 h-full w-full object-contain"
+						/>
+					{:else}
+						<div class="flex h-full items-center justify-center text-muted-foreground">
+							No image available
+						</div>
+					{/if}
+				</div>
+			</div>
+		</Sheet.Content>
+	</Sheet.Root>
 </div>
