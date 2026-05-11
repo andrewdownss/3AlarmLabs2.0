@@ -81,6 +81,12 @@
 		'rehab'
 	];
 
+	/** Blurred backdrop + object-contain foreground — softens portrait letterboxing in scene viewport */
+	const SCENE_BACKDROP_IMG_CLASS =
+		'pointer-events-none absolute inset-0 z-0 h-full w-full scale-110 object-cover opacity-35 blur-xl';
+	const SCENE_FOREGROUND_IMG_CLASS =
+		'pointer-events-none absolute inset-0 z-10 h-full w-full object-contain';
+
 	let stageBannerText = $state('');
 	let stageBannerVisible = $state(false);
 	let stageBannerTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1166,13 +1172,19 @@
 	{:else}
 		<div class="hidden min-h-0 flex-1 overflow-hidden lg:flex lg:flex-row">
 			<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-none">
-				<!-- Narrower canvas + page background on sides reduces wide black letterboxing (object-contain). -->
+				<!-- Scene: blurred backdrop fills viewport; foreground stays object-contain for full photo context -->
 				<div class="flex shrink-0 justify-center border-b bg-muted/30 px-2 py-2">
 					<div
-						class="relative h-[min(36vh,340px)] w-full max-w-xl overflow-hidden rounded-lg bg-black shadow-sm ring-1 ring-border/60 sm:h-[min(38vh,380px)] sm:max-w-2xl md:max-w-3xl"
+						class="relative h-[min(36vh,340px)] w-full max-w-xl overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 sm:h-[min(38vh,380px)] sm:max-w-2xl md:max-w-3xl"
 					>
 						{#if currentSideImage && hasOverlays}
-							<div class="absolute inset-0">
+							<img
+								src={currentSideImage}
+								alt=""
+								aria-hidden="true"
+								class={SCENE_BACKDROP_IMG_CLASS}
+							/>
+							<div class="absolute inset-0 z-10">
 								<OverlayCanvas
 									baseImageUrl={currentSideImage}
 									overlays={currentOverlays}
@@ -1183,15 +1195,21 @@
 						{:else if currentSideImage}
 							<img
 								src={currentSideImage}
+								alt=""
+								aria-hidden="true"
+								class={SCENE_BACKDROP_IMG_CLASS}
+							/>
+							<img
+								src={currentSideImage}
 								alt={sideLabels[currentSide] ?? currentSide}
-								class="absolute inset-0 h-full w-full object-contain"
+								class={SCENE_FOREGROUND_IMG_CLASS}
 							/>
 						{:else}
-							<div class="flex h-full w-full items-center justify-center text-white/40">
+							<div class="flex h-full w-full items-center justify-center text-muted-foreground">
 								No image for {sideLabels[currentSide] ?? currentSide}
 							</div>
 						{/if}
-						<div class="absolute bottom-2 left-2 flex items-center gap-2">
+						<div class="pointer-events-none absolute bottom-2 left-2 z-20 flex items-center gap-2">
 							<span class="text-xs font-medium text-white/80">{sideLabels[currentSide] ?? ''}</span>
 							<span
 								class="rounded px-2 py-0.5 text-xs font-bold text-white {stageBadgeClass[
@@ -1368,7 +1386,8 @@
 					aria-label="Expand scene"
 				>
 					{#if currentSideImage && hasOverlays}
-						<div class="pointer-events-none absolute inset-0">
+						<img src={currentSideImage} alt="" aria-hidden="true" class={SCENE_BACKDROP_IMG_CLASS} />
+						<div class="pointer-events-none absolute inset-0 z-10">
 							<OverlayCanvas
 								baseImageUrl={currentSideImage}
 								overlays={currentOverlays}
@@ -1379,8 +1398,14 @@
 					{:else if currentSideImage}
 						<img
 							src={currentSideImage}
+							alt=""
+							aria-hidden="true"
+							class={SCENE_BACKDROP_IMG_CLASS}
+						/>
+						<img
+							src={currentSideImage}
 							alt={sideLabels[currentSide] ?? currentSide}
-							class="pointer-events-none absolute inset-0 h-full w-full object-cover"
+							class="{SCENE_FOREGROUND_IMG_CLASS}"
 						/>
 					{:else}
 						<div class="flex h-full w-full items-center justify-center text-muted-foreground">
@@ -1390,7 +1415,7 @@
 
 					{#if currentStage}
 						<span
-							class="pointer-events-none absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow {stageBadgeClass[
+							class="pointer-events-none absolute right-2 top-2 z-20 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow {stageBadgeClass[
 								currentStage
 							] ?? 'bg-gray-500'}"
 						>
@@ -1399,13 +1424,13 @@
 					{/if}
 
 					<span
-						class="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white"
+						class="pointer-events-none absolute bottom-2 left-2 z-20 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white"
 					>
 						{sideLabels[currentSide] ?? currentSide}
 					</span>
 
 					<span
-						class="pointer-events-none absolute right-2 bottom-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white"
+						class="pointer-events-none absolute right-2 bottom-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white"
 						aria-hidden="true"
 					>
 						<ExpandIcon class="h-3.5 w-3.5" />
@@ -1413,7 +1438,7 @@
 
 					{#if stageBannerVisible && stageBannerText}
 						<div
-							class="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-4"
+							class="pointer-events-none absolute inset-x-0 top-1/2 z-30 flex -translate-y-1/2 justify-center px-4"
 							aria-live="polite"
 						>
 							<span
@@ -2029,7 +2054,13 @@
 			<div class="min-h-0 flex-1 overflow-hidden px-3 pb-3">
 				<div class="relative h-full w-full overflow-hidden rounded-lg bg-muted">
 					{#if currentSideImage && hasOverlays}
-						<div class="absolute inset-0">
+						<img
+							src={currentSideImage}
+							alt=""
+							aria-hidden="true"
+							class={SCENE_BACKDROP_IMG_CLASS}
+						/>
+						<div class="absolute inset-0 z-10">
 							<OverlayCanvas
 								baseImageUrl={currentSideImage}
 								overlays={currentOverlays}
@@ -2040,8 +2071,14 @@
 					{:else if currentSideImage}
 						<img
 							src={currentSideImage}
+							alt=""
+							aria-hidden="true"
+							class={SCENE_BACKDROP_IMG_CLASS}
+						/>
+						<img
+							src={currentSideImage}
 							alt={sideLabels[currentSide] ?? currentSide}
-							class="absolute inset-0 h-full w-full object-contain"
+							class={SCENE_FOREGROUND_IMG_CLASS}
 						/>
 					{:else}
 						<div class="flex h-full items-center justify-center text-muted-foreground">
