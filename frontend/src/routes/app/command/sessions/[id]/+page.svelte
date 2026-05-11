@@ -81,11 +81,13 @@
 		'rehab'
 	];
 
-	/** Blurred backdrop + object-contain foreground — softens portrait letterboxing in scene viewport */
+	/** Backdrop blur for overlay previews and full-sheet; plain desktop/mobile photos use SCENE_FOREGROUND_FILL_CLASS */
 	const SCENE_BACKDROP_IMG_CLASS =
 		'pointer-events-none absolute inset-0 z-0 h-full w-full scale-110 object-cover opacity-35 blur-xl';
 	const SCENE_FOREGROUND_IMG_CLASS =
 		'pointer-events-none absolute inset-0 z-10 h-full w-full object-contain';
+	const SCENE_FOREGROUND_FILL_CLASS =
+		'pointer-events-none absolute inset-0 z-10 h-full w-full object-cover';
 
 	let stageBannerText = $state('');
 	let stageBannerVisible = $state(false);
@@ -394,6 +396,98 @@
 		getOverlaysForSideStage(stageMetadata, currentSide, currentStage)
 	);
 	const hasOverlays = $derived(currentOverlays.length > 0);
+
+	interface SceneImageIntrinsics {
+		url: string;
+		width: number;
+		height: number;
+	}
+
+	/** Largest box with image aspect contained in (availableWidthPx × maxHeightPx). */
+	function fitSceneAspectBox(
+		availableWidthPx: number,
+		intrinsic: { width: number; height: number },
+		maxHeightPx: number
+	): { width: number; height: number } | null {
+		if (!(availableWidthPx > 0) || !(maxHeightPx > 0)) return null;
+		const iw = intrinsic.width;
+		const ih = intrinsic.height;
+		if (!(iw > 0) || !(ih > 0)) return null;
+		const ratio = iw / ih;
+		let bw = availableWidthPx;
+		let bh = bw / ratio;
+		if (bh > maxHeightPx) {
+			bh = maxHeightPx;
+			bw = bh * ratio;
+		}
+		return { width: Math.floor(bw), height: Math.floor(bh) };
+	}
+
+	let sceneImageIntrinsics = $state<SceneImageIntrinsics | null>(null);
+	let desktopSceneShelfW = $state(0);
+	let mobileSceneShelfW = $state(0);
+	let sceneSheetShelfW = $state(0);
+	let viewportInnerHeight = $state(0);
+
+	const intrinsicSceneActive = $derived(
+		currentSideImage && sceneImageIntrinsics?.url === currentSideImage
+			? sceneImageIntrinsics
+			: null
+	);
+
+	const desktopSceneMaxH = $derived(
+		viewportInnerHeight > 0
+			? Math.min(viewportInnerHeight * 0.52, 520)
+			: 520
+	);
+
+	const desktopSceneSizedBox = $derived(
+		intrinsicSceneActive && desktopSceneShelfW > 0
+			? fitSceneAspectBox(desktopSceneShelfW, intrinsicSceneActive, desktopSceneMaxH)
+			: null
+	);
+
+	const desktopSceneSizedStyle = $derived(
+		desktopSceneSizedBox
+			? `width:${desktopSceneSizedBox.width}px;height:${desktopSceneSizedBox.height}px;max-width:100%`
+			: undefined
+	);
+
+	const mobileSceneMaxH = $derived(
+		viewportInnerHeight > 0
+			? Math.min(viewportInnerHeight * 0.38, 420)
+			: 400
+	);
+
+	const mobileSceneSizedBox = $derived(
+		intrinsicSceneActive && mobileSceneShelfW > 0
+			? fitSceneAspectBox(mobileSceneShelfW, intrinsicSceneActive, mobileSceneMaxH)
+			: null
+	);
+
+	const mobileSceneSizedStyle = $derived(
+		mobileSceneSizedBox
+			? `width:${mobileSceneSizedBox.width}px;height:${mobileSceneSizedBox.height}px;max-width:100%`
+			: undefined
+	);
+
+	const sheetSceneMaxH = $derived(
+		viewportInnerHeight > 0
+			? Math.min(Math.max(viewportInnerHeight * 0.92 - 120, 240), viewportInnerHeight * 0.78)
+			: 560
+	);
+
+	const sheetSceneSizedBox = $derived(
+		intrinsicSceneActive && sceneSheetShelfW > 0
+			? fitSceneAspectBox(sceneSheetShelfW, intrinsicSceneActive, sheetSceneMaxH)
+			: null
+	);
+
+	const sheetSceneSizedStyle = $derived(
+		sheetSceneSizedBox
+			? `width:${sheetSceneSizedBox.width}px;height:${sheetSceneSizedBox.height}px;max-width:100%`
+			: undefined
+	);
 
 	function sideImageUrls(): string[] {
 		return Object.values(sideImageMap).filter((url): url is string => Boolean(url));
@@ -827,7 +921,43 @@
 		socket?.emit('trainer:session:join', { sessionId: data.session.id, role: 'student' });
 	}
 
+	let teardownViewportResize: (() => void) | null = null;
+
+	$effect(() => {
+		if (!browser) return;
+		const url = currentSideImage;
+		if (!url) {
+			sceneImageIntrinsics = null;
+			return;
+		}
+		let cancelled = false;
+		const img = new Image();
+		img.crossOrigin = 'anonymous';
+		img.onload = () => {
+			if (cancelled) return;
+			const nw = img.naturalWidth || img.width;
+			const nh = img.naturalHeight || img.height;
+			if (!(nw > 0) || !(nh > 0)) return;
+			sceneImageIntrinsics = { url, width: nw, height: nh };
+		};
+		img.onerror = () => {
+			if (!cancelled) sceneImageIntrinsics = null;
+		};
+		img.src = url;
+		return () => {
+			cancelled = true;
+		};
+	});
+
 	onMount(() => {
+		if (typeof window !== 'undefined') {
+			viewportInnerHeight = window.innerHeight;
+			const onResize = () => {
+				viewportInnerHeight = window.innerHeight;
+			};
+			window.addEventListener('resize', onResize);
+			teardownViewportResize = () => window.removeEventListener('resize', onResize);
+		}
 		clockInterval = setInterval(() => {
 			if (hasStarted && !isPaused) sessionSeconds++;
 		}, 1000);
@@ -923,6 +1053,7 @@
 	});
 
 	onDestroy(() => {
+		if (typeof window !== 'undefined' && teardownViewportResize) teardownViewportResize();
 		pttDestroyed = true;
 		pttHeld = false;
 		if (mediaRecorder?.state === 'recording') {
@@ -1172,11 +1303,15 @@
 	{:else}
 		<div class="hidden min-h-0 flex-1 overflow-hidden lg:flex lg:flex-row">
 			<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-none">
-				<!-- Scene: blurred backdrop fills viewport; foreground stays object-contain for full photo context -->
+				<!-- Scene: intrinsic aspect when known so overlay/cover fill the viewport without letterboxing -->
 				<div class="flex shrink-0 justify-center border-b bg-muted/30 px-2 py-2">
-					<div
-						class="relative h-[min(36vh,340px)] w-full max-w-xl overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 sm:h-[min(38vh,380px)] sm:max-w-2xl md:max-w-3xl"
-					>
+					<div bind:clientWidth={desktopSceneShelfW} class="w-full shrink-0">
+						<div
+							class="relative mx-auto overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 {desktopSceneSizedStyle
+								? ''
+								: 'h-[min(48vh,460px)] w-full sm:h-[min(52vh,520px)]'}"
+							style={desktopSceneSizedStyle}
+						>
 						{#if currentSideImage && hasOverlays}
 							<img
 								src={currentSideImage}
@@ -1195,14 +1330,8 @@
 						{:else if currentSideImage}
 							<img
 								src={currentSideImage}
-								alt=""
-								aria-hidden="true"
-								class={SCENE_BACKDROP_IMG_CLASS}
-							/>
-							<img
-								src={currentSideImage}
 								alt={sideLabels[currentSide] ?? currentSide}
-								class={SCENE_FOREGROUND_IMG_CLASS}
+								class={SCENE_FOREGROUND_FILL_CLASS}
 							/>
 						{:else}
 							<div class="flex h-full w-full items-center justify-center text-muted-foreground">
@@ -1216,6 +1345,7 @@
 									currentStage
 								] ?? 'bg-gray-500'}">{stageLabels[currentStage] ?? currentStage}</span
 							>
+						</div>
 						</div>
 					</div>
 				</div>
@@ -1378,11 +1508,17 @@
 		<!-- Mobile-only post-start layout -->
 		<div class="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
 			<!-- Scene viewport -->
-			<div class="shrink-0 border-b bg-muted/30 px-2 pb-2 pt-2">
+			<div
+				class="shrink-0 border-b bg-muted/30 px-2 pb-2 pt-2"
+				bind:clientWidth={mobileSceneShelfW}
+			>
 				<button
 					type="button"
 					onclick={() => (sceneSheetOpen = true)}
-					class="relative block aspect-4/3 w-full overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					class="relative block overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {mobileSceneSizedStyle
+						? 'mx-auto'
+						: 'aspect-4/3 w-full'}"
+					style={mobileSceneSizedStyle}
 					aria-label="Expand scene"
 				>
 					{#if currentSideImage && hasOverlays}
@@ -1398,14 +1534,8 @@
 					{:else if currentSideImage}
 						<img
 							src={currentSideImage}
-							alt=""
-							aria-hidden="true"
-							class={SCENE_BACKDROP_IMG_CLASS}
-						/>
-						<img
-							src={currentSideImage}
 							alt={sideLabels[currentSide] ?? currentSide}
-							class="{SCENE_FOREGROUND_IMG_CLASS}"
+							class={SCENE_FOREGROUND_FILL_CLASS}
 						/>
 					{:else}
 						<div class="flex h-full w-full items-center justify-center text-muted-foreground">
@@ -2035,7 +2165,7 @@
 	<Sheet.Root bind:open={sceneSheetOpen}>
 		<Sheet.Content
 			side="bottom"
-			class="h-[92dvh] rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]"
+			class="flex h-[92dvh] flex-col rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]"
 		>
 			<Sheet.Header class="text-left">
 				<Sheet.Title class="text-base">
@@ -2051,8 +2181,17 @@
 					{/if}
 				</Sheet.Title>
 			</Sheet.Header>
-			<div class="min-h-0 flex-1 overflow-hidden px-3 pb-3">
-				<div class="relative h-full w-full overflow-hidden rounded-lg bg-muted">
+			<div class="flex min-h-0 flex-1 shrink-0 flex-col overflow-hidden px-3 pb-3">
+				<div
+					bind:clientWidth={sceneSheetShelfW}
+					class="flex min-h-[min(50dvh,360px)] flex-1 items-center justify-center overflow-hidden"
+				>
+					<div
+						class="relative mx-auto overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 {sheetSceneSizedStyle
+							? ''
+							: 'h-full min-h-[min(48dvh,420px)] w-full'}"
+						style={sheetSceneSizedStyle}
+					>
 					{#if currentSideImage && hasOverlays}
 						<img
 							src={currentSideImage}
@@ -2085,6 +2224,7 @@
 							No image available
 						</div>
 					{/if}
+					</div>
 				</div>
 			</div>
 		</Sheet.Content>
