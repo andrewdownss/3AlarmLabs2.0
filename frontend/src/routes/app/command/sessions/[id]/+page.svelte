@@ -23,6 +23,7 @@
 		formatUnitAssignmentLine,
 		type BoardEntryLike
 	} from '$lib/trainer-command-board';
+	import { parseArrivalUnit } from '$lib/components/scene-editor/simple-scenario-editor/stage-mapping';
 	import PauseIcon from '@lucide/svelte/icons/pause';
 	import PlayIcon from '@lucide/svelte/icons/play';
 	import MicIcon from '@lucide/svelte/icons/mic';
@@ -89,7 +90,7 @@
 	let lastSeenTranscript = '';
 
 	let timelineFilter = $state<'all' | 'RADIO' | 'STAGE' | 'HAZARD'>('all');
-	let timelineScrollEl: HTMLDivElement | null = $state(null);
+	let timelineScrollEls: HTMLDivElement[] = [];
 
 	const STATUS_CYCLE = [
 		'Assigned',
@@ -129,9 +130,7 @@
 		if (tab === 'board') boardHasNew = false;
 		if (tab === 'timeline') {
 			timelineHasNew = false;
-			void tick().then(() => {
-				if (timelineScrollEl) timelineScrollEl.scrollTop = timelineScrollEl.scrollHeight;
-			});
+			scrollTimelineToBottom();
 		}
 	}
 
@@ -181,6 +180,19 @@
 		status: string;
 	}
 
+	interface ScenarioResource {
+		unitName: string;
+		status?: string;
+	}
+
+	interface ScriptedArrivalResource extends ScenarioResource {
+		offsetSeconds: number;
+	}
+
+	function hasArrivalOffset(resource: ScenarioResource): resource is ScriptedArrivalResource {
+		return 'offsetSeconds' in resource && typeof resource.offsetSeconds === 'number';
+	}
+
 	let boardEntries = $state<BoardEntry[]>([]);
 
 	let lastHydratedSessionId = $state<string | null>(null);
@@ -228,10 +240,53 @@
 		timelineHasNew = false;
 	});
 
+	const scriptedArrivalResources = $derived.by<ScriptedArrivalResource[]>(() => {
+		if (!isSelfPaced) return [];
+		const arrivals: ScriptedArrivalResource[] = [];
+		const config = data.scenario.selfPacedConfigJson as
+			| { timeline?: Array<{ label?: string | null; offsetSeconds?: number | null }> }
+			| null
+			| undefined;
+		for (const event of config?.timeline ?? []) {
+			const unitName = parseArrivalUnit(event.label);
+			if (!unitName) continue;
+			const offsetSeconds =
+				typeof event.offsetSeconds === 'number' && Number.isFinite(event.offsetSeconds)
+					? Math.max(0, Math.floor(event.offsetSeconds))
+					: 0;
+			const existing = arrivals.find((arrival) => arrival.unitName === unitName);
+			if (existing && existing.offsetSeconds <= offsetSeconds) continue;
+			const nextArrival = { unitName, status: 'available', offsetSeconds };
+			if (existing) {
+				arrivals.splice(arrivals.indexOf(existing), 1, nextArrival);
+			} else {
+				arrivals.push(nextArrival);
+			}
+		}
+		return arrivals.sort(
+			(a, b) => a.offsetSeconds - b.offsetSeconds || a.unitName.localeCompare(b.unitName)
+		);
+	});
+
+	const visibleScenarioResources = $derived<ScenarioResource[]>(
+		isSelfPaced ? scriptedArrivalResources : (data.scenario.defaultResources ?? [])
+	);
+
 	const availableUnits = $derived(
-		(data.scenario.defaultResources ?? []).filter(
-			(r: { unitName: string }) => !boardEntries.some((e) => e.unitName === r.unitName)
-		)
+		visibleScenarioResources.filter((resource) => {
+			if (isSelfPaced && hasArrivalOffset(resource) && resource.offsetSeconds > sessionSeconds) {
+				return false;
+			}
+			return !boardEntries.some((entry) => entry.unitName === resource.unitName);
+		})
+	);
+	const hasPendingScriptedArrivals = $derived(
+		isSelfPaced &&
+			scriptedArrivalResources.some(
+				(resource) =>
+					resource.offsetSeconds > sessionSeconds &&
+					!boardEntries.some((entry) => entry.unitName === resource.unitName)
+			)
 	);
 
 	const legacyBoardEntries = $derived(orphanBoardEntries(boardEntries as BoardEntryLike[]));
@@ -366,6 +421,21 @@
 		return `${m}:${s}`;
 	}
 
+	function scrollTimelineToBottom() {
+		void tick().then(() => {
+			for (const el of timelineScrollEls) el.scrollTop = el.scrollHeight;
+		});
+	}
+
+	function timelineScrollContainer(node: HTMLDivElement) {
+		timelineScrollEls = [...timelineScrollEls, node];
+		return {
+			destroy() {
+				timelineScrollEls = timelineScrollEls.filter((el) => el !== node);
+			}
+		};
+	}
+
 	function addTimelineEvent(type: string, text: string, atSeconds = sessionSeconds) {
 		timelineEvents = [
 			...timelineEvents,
@@ -373,11 +443,8 @@
 		];
 		if (activeMobileTab !== 'timeline') {
 			timelineHasNew = true;
-		} else {
-			void tick().then(() => {
-				if (timelineScrollEl) timelineScrollEl.scrollTop = timelineScrollEl.scrollHeight;
-			});
 		}
+		scrollTimelineToBottom();
 	}
 
 	async function startRecording() {
@@ -996,13 +1063,13 @@
 								class="mt-3 h-40 w-full rounded-lg object-cover sm:h-48"
 							/>
 						{/if}
-						{#if (data.scenario.defaultResources ?? []).length > 0}
+						{#if visibleScenarioResources.length > 0}
 							<div class="mt-3">
 								<p class="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-									Available resources
+									{isSelfPaced ? 'Scripted arrivals' : 'Available resources'}
 								</p>
 								<div class="mt-1.5 flex flex-wrap gap-1.5">
-									{#each data.scenario.defaultResources ?? [] as resource (resource.unitName)}
+									{#each visibleScenarioResources as resource (resource.unitName)}
 										<Badge variant="secondary">{resource.unitName}</Badge>
 									{/each}
 								</div>
@@ -1158,7 +1225,9 @@
 									{resource.unitName}
 								</Badge>
 							{:else}
-								<span class="text-[10px] text-muted-foreground">All units assigned</span>
+								<span class="text-[10px] text-muted-foreground">
+									{hasPendingScriptedArrivals ? 'Waiting on scripted arrivals' : 'All units assigned'}
+								</span>
 							{/each}
 						</div>
 					</div>
@@ -1268,7 +1337,7 @@
 					{/if}
 				</div>
 
-				<div class="min-h-0 flex-1 overflow-y-auto p-3">
+				<div use:timelineScrollContainer class="min-h-0 flex-1 overflow-y-auto p-3">
 					<h3 class="mb-2 text-xs font-semibold">Timeline</h3>
 					<div class="space-y-1.5">
 						{#each timelineEvents as event (event.id)}
@@ -1542,7 +1611,9 @@
 							<div
 								class="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground"
 							>
-								All units are assigned.
+								{hasPendingScriptedArrivals
+									? 'No scripted units have arrived yet.'
+									: 'All units are assigned.'}
 							</div>
 						{:else}
 							<div class="grid grid-cols-2 gap-2">
@@ -1615,7 +1686,7 @@
 							</button>
 						{/each}
 					</div>
-					<div bind:this={timelineScrollEl} class="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+					<div use:timelineScrollContainer class="min-h-0 flex-1 overflow-y-auto px-3 py-2">
 						{#if filteredTimelineEvents.length === 0}
 							<p class="py-8 text-center text-xs text-muted-foreground">No events to show.</p>
 						{:else}
@@ -1882,7 +1953,9 @@
 			<div class="space-y-3 px-4">
 				{#if availableUnits.length === 0}
 					<p class="rounded-md border bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
-						All units are already assigned.
+						{hasPendingScriptedArrivals
+							? 'No scripted units are available yet.'
+							: 'All units are already assigned.'}
 					</p>
 				{:else}
 					<div>
