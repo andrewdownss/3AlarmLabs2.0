@@ -18,6 +18,7 @@ export const load: PageServerLoad = async () => {
 			sideDeltaImageUrl: true,
 			dispatchNotes: true,
 			selfPacedConfigJson: true,
+			stageMetadataJson: true,
 			defaultResources: true
 		}
 	});

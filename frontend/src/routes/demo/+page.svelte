@@ -1,16 +1,28 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from 'svelte';
+	import { browser } from '$app/environment';
 	import { LandingFooter, LandingHeader } from '$lib/components/landing';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import * as Sheet from '$lib/components/ui/sheet';
 	import { PLANS } from '$lib/plans';
 	import { parseArrivalUnit } from '$lib/components/scene-editor/simple-scenario-editor/stage-mapping';
+	import OverlayCanvas from '$lib/components/scene-editor/konva-overlay-editor/OverlayCanvas.svelte';
+	import { preloadImages } from '$lib/components/scene-editor/konva-overlay-editor/image-preload';
+	import {
+		normalizeAnimationOverlays,
+		type PersistedAnimationOverlay
+	} from '$lib/components/scene-editor/konva-overlay-editor/overlay-utils';
+	import { preloadSpritesheetPacks } from '$lib/components/scene-editor/konva-overlay-editor/spritesheet-cache';
+	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
 	import {
 		COMMAND_BOARD_COLUMNS,
 		entriesForColumn,
 		formatUnitAssignmentLine
 	} from '$lib/trainer-command-board';
 	import { defaultOgImageUrl, toCanonicalUrl, toJsonLd } from '$lib/seo';
+	import MicIcon from '@lucide/svelte/icons/mic';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -96,6 +108,41 @@
 		fully_developed: 'bg-red-500',
 		decay: 'bg-emerald-600'
 	};
+
+	const STATUS_CYCLE = ['Assigned', 'En Route', 'On Scene', 'Operating', 'PAR Completed'] as const;
+	const STATUS_CHOICES = [
+		'Assigned',
+		'En Route',
+		'On Scene',
+		'Operating',
+		'PAR Completed',
+		'Available',
+		'Out of Service'
+	];
+	const STATUS_COLORS: Record<string, string> = {
+		Assigned: 'bg-blue-100 text-blue-700',
+		'En Route': 'bg-amber-100 text-amber-700',
+		'On Scene': 'bg-purple-100 text-purple-700',
+		Operating: 'bg-green-100 text-green-700',
+		'PAR Completed': 'bg-emerald-100 text-emerald-800',
+		Available: 'bg-gray-100 text-gray-600',
+		'Out of Service': 'bg-red-100 text-red-700'
+	};
+	const DIVISION_CHOICES = ['Basement', 'Div 1', 'Div 2', 'Div 3', 'Roof', 'RIC', 'Med', 'Reserve'];
+	const ASSIGNMENT_SUGGESTIONS = [
+		'search',
+		'vent',
+		'RIC',
+		'water supply',
+		'pump operations',
+		'attack line',
+		'overhaul',
+		'rehab'
+	];
+	const SCENE_BACKDROP_IMG_CLASS =
+		'pointer-events-none absolute inset-0 z-0 h-full w-full scale-110 object-cover opacity-35 blur-xl';
+	const SCENE_FOREGROUND_FILL_CLASS =
+		'pointer-events-none absolute inset-0 z-10 h-full w-full object-cover';
 
 	const fallbackDemoScript: DemoScriptEvent[] = [
 		{
@@ -280,8 +327,17 @@
 	let boardEntries = $state<DemoBoardEntry[]>([]);
 	let availableUnits = $state<string[]>(initialAvailableUnits());
 	let firedScriptEventIds = $state<string[]>([]);
-	let selectedUnitName = $state<string | null>(null);
-	let selectedAssignment = $state('');
+	let dispatchSheetOpen = $state(false);
+	let editSheetOpen = $state(false);
+	let premiumSheetOpen = $state(false);
+	let dispatchUnitName = $state('');
+	let dispatchDivision = $state('Div 1');
+	let dispatchAssignment = $state('');
+	let editingEntry = $state<DemoBoardEntry | null>(null);
+	let editDivision = $state('');
+	let editAssignment = $state('');
+	let editStatus = $state('');
+	let timelineFilter = $state<'all' | 'RADIO' | 'STAGE' | 'HAZARD'>('all');
 	let timelineEvents = $state<DemoTimelineEvent[]>([
 		{
 			id: 'intro',
@@ -293,6 +349,10 @@
 
 	let clockInterval: ReturnType<typeof setInterval> | null = null;
 	let timelineScrollEls: HTMLDivElement[] = [];
+	let sceneImageIntrinsics = $state<{ url: string; width: number; height: number } | null>(null);
+	let demoSceneShelfW = $state(0);
+	let viewportInnerHeight = $state(0);
+	let teardownViewportResize: (() => void) | null = null;
 	const activeDemoScript = $derived(scriptFromSelectedScenario());
 	const demoDurationSeconds = DEMO_PREVIEW_SECONDS;
 	const visibleScenarioResources = $derived(scriptedArrivalResources());
@@ -319,7 +379,109 @@
 		};
 		return images[currentSide] ?? scenario.sideAlphaImageUrl ?? null;
 	});
-	const selectedUnitLabel = $derived(selectedUnitName ?? 'Select a unit');
+	const filteredTimelineEvents = $derived(
+		timelineFilter === 'all'
+			? timelineEvents
+			: timelineEvents.filter((event) =>
+					timelineFilter === 'STAGE'
+						? event.type === 'STAGE' || event.type === 'SIDE'
+						: event.type === timelineFilter
+				)
+	);
+	const previewComplete = $derived(hasStarted && sessionSeconds >= demoDurationSeconds && isPaused);
+
+	type StageOverlays = Record<string, AnimationOverlay[]>;
+	type SideStageOverlays = Record<string, StageOverlays>;
+
+	const stageMetadata = $derived((data.demoScenario?.stageMetadataJson ?? {}) as SideStageOverlays);
+	const currentOverlays = $derived(
+		getOverlaysForSideStage(stageMetadata, currentSide, currentStage)
+	);
+	const hasOverlays = $derived(currentOverlays.length > 0);
+	const intrinsicSceneActive = $derived(
+		currentSideImage && sceneImageIntrinsics?.url === currentSideImage ? sceneImageIntrinsics : null
+	);
+	const demoSceneMaxH = $derived(
+		viewportInnerHeight > 0 ? Math.min(viewportInnerHeight * 0.52, 520) : 520
+	);
+	const demoSceneSizedBox = $derived(
+		intrinsicSceneActive && demoSceneShelfW > 0
+			? fitSceneAspectBox(demoSceneShelfW, intrinsicSceneActive, demoSceneMaxH)
+			: null
+	);
+	const demoSceneSizedStyle = $derived(
+		demoSceneSizedBox
+			? `width:${demoSceneSizedBox.width}px;height:${demoSceneSizedBox.height}px;max-width:100%`
+			: undefined
+	);
+
+	function parsePersistedOverlays(value: unknown): PersistedAnimationOverlay[] | undefined {
+		if (!Array.isArray(value)) return undefined;
+		return value as PersistedAnimationOverlay[];
+	}
+
+	function getOverlaysForSideStage(
+		meta: SideStageOverlays,
+		side: SideKey,
+		stage: StageKey
+	): AnimationOverlay[] {
+		const raw = (meta[side] as StageOverlays | undefined)?.[stage];
+		return normalizeAnimationOverlays(parsePersistedOverlays(raw));
+	}
+
+	function fitSceneAspectBox(
+		availableWidthPx: number,
+		intrinsic: { width: number; height: number },
+		maxHeightPx: number
+	): { width: number; height: number } | null {
+		if (!(availableWidthPx > 0) || !(maxHeightPx > 0)) return null;
+		const iw = intrinsic.width;
+		const ih = intrinsic.height;
+		if (!(iw > 0) || !(ih > 0)) return null;
+		const ratio = iw / ih;
+		let width = availableWidthPx;
+		let height = width / ratio;
+		if (height > maxHeightPx) {
+			height = maxHeightPx;
+			width = height * ratio;
+		}
+		return { width: Math.floor(width), height: Math.floor(height) };
+	}
+
+	function sideImageUrls(): string[] {
+		return [
+			data.demoScenario?.sideAlphaImageUrl,
+			data.demoScenario?.sideBravoImageUrl,
+			data.demoScenario?.sideCharlieImageUrl,
+			data.demoScenario?.sideDeltaImageUrl
+		].filter((url): url is string => Boolean(url));
+	}
+
+	function allOverlayPackIds(): string[] {
+		const packIds: string[] = [];
+		for (const side of Object.values(stageMetadata)) {
+			for (const stage of Object.values(side ?? {})) {
+				for (const overlay of normalizeAnimationOverlays(parsePersistedOverlays(stage))) {
+					if (!packIds.includes(overlay.packId)) packIds.push(overlay.packId);
+				}
+			}
+		}
+		return packIds;
+	}
+
+	async function warmScenarioMedia(): Promise<void> {
+		if (!browser) return;
+		await Promise.allSettled([
+			preloadImages(sideImageUrls()),
+			preloadSpritesheetPacks(allOverlayPackIds())
+		]);
+	}
+
+	function nextStatus(current: string): string {
+		const idx = (STATUS_CYCLE as readonly string[]).indexOf(current);
+		if (idx === -1 || idx >= STATUS_CYCLE.length - 1) return STATUS_CYCLE[0];
+		return STATUS_CYCLE[idx + 1];
+	}
 
 	function formatClock(totalSeconds: number): string {
 		const safeSeconds = Math.max(0, totalSeconds);
@@ -426,8 +588,17 @@
 		boardEntries = [];
 		availableUnits = initialAvailableUnits();
 		firedScriptEventIds = [];
-		selectedUnitName = null;
-		selectedAssignment = '';
+		dispatchSheetOpen = false;
+		editSheetOpen = false;
+		premiumSheetOpen = false;
+		dispatchUnitName = '';
+		dispatchDivision = 'Div 1';
+		dispatchAssignment = '';
+		editingEntry = null;
+		editDivision = '';
+		editAssignment = '';
+		editStatus = '';
+		timelineFilter = 'all';
 		timelineEvents = [
 			{
 				id: 'intro',
@@ -464,14 +635,18 @@
 		resetDemoState();
 	}
 
-	function selectUnit(unitName: string): void {
-		selectedUnitName = unitName;
+	function openDispatchSheet(unitName: string, division = 'Div 1'): void {
+		dispatchUnitName = unitName;
+		dispatchDivision = division;
+		dispatchAssignment = '';
+		dispatchSheetOpen = true;
 	}
 
-	function placeSelectedUnit(division: string): void {
-		if (!selectedUnitName) return;
-		const unitName = selectedUnitName;
-		const assignment = selectedAssignment.trim();
+	function submitDispatch(): void {
+		if (!dispatchUnitName) return;
+		const unitName = dispatchUnitName;
+		const division = dispatchDivision;
+		const assignment = dispatchAssignment.trim();
 		const entry: DemoBoardEntry = {
 			id: `manual-${unitName}-${division}`,
 			division,
@@ -481,26 +656,100 @@
 		};
 		boardEntries = [...boardEntries.filter((existing) => existing.unitName !== unitName), entry];
 		availableUnits = availableUnits.filter((unit) => unit !== unitName);
-		selectedUnitName = null;
-		selectedAssignment = '';
+		dispatchSheetOpen = false;
+		dispatchUnitName = '';
+		dispatchAssignment = '';
 		addTimelineEvent(
 			'DISPATCH',
 			`${unitName} → ${division}${assignment ? ` (${assignment})` : ''}`
 		);
 	}
 
-	function returnUnitToAvailable(entry: DemoBoardEntry): void {
+	function openEdit(entry: DemoBoardEntry): void {
+		editingEntry = entry;
+		editDivision = entry.division;
+		editAssignment = entry.assignment;
+		editStatus = entry.status;
+		editSheetOpen = true;
+	}
+
+	function closeEdit(): void {
+		editSheetOpen = false;
+		editingEntry = null;
+	}
+
+	function saveEdit(): void {
+		if (!editingEntry) return;
+		const nextEntry: DemoBoardEntry = {
+			...editingEntry,
+			division: editDivision,
+			assignment: editAssignment.trim(),
+			status: editStatus
+		};
+		boardEntries = boardEntries.map((entry) => (entry.id === nextEntry.id ? nextEntry : entry));
+		addTimelineEvent('FIX', `Updated ${nextEntry.unitName}.`);
+		closeEdit();
+	}
+
+	function cycleEntryStatus(entry: DemoBoardEntry): void {
+		const status = nextStatus(entry.status);
+		boardEntries = boardEntries.map((existing) =>
+			existing.id === entry.id ? { ...existing, status } : existing
+		);
+		addTimelineEvent('STATUS', `${entry.unitName} ${status}.`);
+	}
+
+	function returnEditingUnitToAvailable(): void {
+		if (!editingEntry) return;
+		const entry = editingEntry;
 		boardEntries = boardEntries.filter((existing) => existing.id !== entry.id);
 		if (!availableUnits.includes(entry.unitName))
 			availableUnits = [...availableUnits, entry.unitName];
 		addTimelineEvent('BOARD', `${entry.unitName} returned to available units.`);
+		closeEdit();
 	}
+
+	$effect(() => {
+		if (!browser) return;
+		const url = currentSideImage;
+		if (!url) {
+			sceneImageIntrinsics = null;
+			return;
+		}
+		let cancelled = false;
+		const img = new Image();
+		img.crossOrigin = 'anonymous';
+		img.onload = () => {
+			if (cancelled) return;
+			const width = img.naturalWidth || img.width;
+			const height = img.naturalHeight || img.height;
+			if (!(width > 0) || !(height > 0)) return;
+			sceneImageIntrinsics = { url, width, height };
+		};
+		img.onerror = () => {
+			if (!cancelled) sceneImageIntrinsics = null;
+		};
+		img.src = url;
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	onDestroy(() => {
 		stopClock();
+		if (teardownViewportResize) teardownViewportResize();
 	});
 
 	onMount(() => {
+		if (typeof window !== 'undefined') {
+			viewportInnerHeight = window.innerHeight;
+			const onResize = () => {
+				viewportInnerHeight = window.innerHeight;
+			};
+			window.addEventListener('resize', onResize);
+			teardownViewportResize = () => window.removeEventListener('resize', onResize);
+		}
+		void warmScenarioMedia();
 		handleStartDemo();
 	});
 </script>
@@ -579,50 +828,90 @@
 					<div class="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,500px)]">
 						<div class="space-y-4">
 							<div class="overflow-hidden rounded-lg border bg-muted/20">
-								<div class="relative flex h-56 items-end bg-muted p-4 sm:h-64">
-									{#if currentSideImage}
-										<img
-											src={currentSideImage}
-											alt={sideLabels[currentSide]}
-											class="absolute inset-0 h-full w-full object-cover"
-											width="960"
-											height="360"
-											decoding="async"
-										/>
-										<div
-											class="absolute inset-0 bg-linear-to-t from-black/70 via-black/20 to-transparent"
-										></div>
-									{:else}
-										<div
-											class="absolute inset-0 bg-linear-to-br from-slate-900 via-slate-700 to-orange-700"
-										></div>
-										<div
-											class="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.18),transparent_45%)]"
-										></div>
-									{/if}
-									<div class="relative z-10 max-w-xl">
-										<p class="text-sm font-semibold text-white">{scenarioTitle}</p>
-										{#if data.demoScenario?.dispatchNotes}
-											<p class="mt-1 line-clamp-2 text-xs whitespace-pre-line text-white/85">
-												{data.demoScenario.dispatchNotes}
-											</p>
+								<div bind:clientWidth={demoSceneShelfW} class="flex justify-center bg-muted/30 p-2">
+									<div
+										class="relative overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 {demoSceneSizedStyle
+											? ''
+											: 'h-[min(48vh,460px)] w-full sm:h-[min(52vh,520px)]'}"
+										style={demoSceneSizedStyle}
+									>
+										{#if currentSideImage && hasOverlays}
+											<img
+												src={currentSideImage}
+												alt=""
+												aria-hidden="true"
+												class={SCENE_BACKDROP_IMG_CLASS}
+											/>
+											<div class="absolute inset-0 z-10">
+												<OverlayCanvas
+													baseImageUrl={currentSideImage}
+													overlays={currentOverlays}
+													selectedOverlayId={null}
+													isInteractive={false}
+												/>
+											</div>
+										{:else if currentSideImage}
+											<img
+												src={currentSideImage}
+												alt={sideLabels[currentSide]}
+												class={SCENE_FOREGROUND_FILL_CLASS}
+												width="960"
+												height="360"
+												decoding="async"
+											/>
 										{:else}
-											<p class="mt-1 text-xs text-white/85">
-												Heavy smoke from the first floor with extension toward the attic.
-											</p>
+											<div
+												class="absolute inset-0 bg-linear-to-br from-slate-900 via-slate-700 to-orange-700"
+											></div>
+											<div
+												class="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.18),transparent_45%)]"
+											></div>
 										{/if}
-									</div>
-									<div class="absolute top-3 right-3 z-10 flex gap-1.5">
-										<span
-											class="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white {stageBadgeClass[
-												currentStage
-											]}"
+										<div
+											class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/75 via-black/25 to-transparent p-4"
 										>
-											{stageLabels[currentStage]}
-										</span>
-										<span class="rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
-											{sideLabels[currentSide]}
-										</span>
+											<p class="text-sm font-semibold text-white">{scenarioTitle}</p>
+											{#if data.demoScenario?.dispatchNotes}
+												<p class="mt-1 line-clamp-2 text-xs whitespace-pre-line text-white/85">
+													{data.demoScenario.dispatchNotes}
+												</p>
+											{:else}
+												<p class="mt-1 text-xs text-white/85">
+													Heavy smoke from the first floor with extension toward the attic.
+												</p>
+											{/if}
+										</div>
+										<div class="absolute top-3 right-3 z-20 flex gap-1.5">
+											<span
+												class="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white {stageBadgeClass[
+													currentStage
+												]}"
+											>
+												{stageLabels[currentStage]}
+											</span>
+											<span class="rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
+												{sideLabels[currentSide]}
+											</span>
+										</div>
+										{#if previewComplete}
+											<div
+												class="absolute inset-0 z-30 flex items-center justify-center bg-black/55 p-4"
+											>
+												<div
+													class="max-w-sm rounded-xl border border-white/20 bg-background p-5 text-center shadow-xl"
+												>
+													<h3 class="text-lg font-semibold">Two-minute preview complete</h3>
+													<p class="mt-2 text-sm text-muted-foreground">
+														Create an account to run the full self-paced simulation with radio
+														dispatch and after-action review.
+													</p>
+													<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+														<Button href={individualSignupHref}>Start 7-day trial</Button>
+														<Button variant="outline" href="/pricing">See pricing</Button>
+													</div>
+												</div>
+											</div>
+										{/if}
 									</div>
 								</div>
 							</div>
@@ -637,13 +926,10 @@
 											{#each availableUnits as unit (unit)}
 												<button
 													type="button"
-													onclick={() => selectUnit(unit)}
-													class="rounded-md border px-2.5 py-1 text-xs font-medium transition-colors {selectedUnitName ===
-													unit
-														? 'border-primary bg-primary text-primary-foreground'
-														: 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}"
+													onclick={() => openDispatchSheet(unit)}
+													class="rounded-md border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
 												>
-													{unit}
+													{unit} <span class="text-muted-foreground">Dispatch</span>
 												</button>
 											{/each}
 										</div>
@@ -654,18 +940,10 @@
 												: 'No available units in this preview.'}
 										</p>
 									{/if}
-									<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-										<label class="sr-only" for="demo-assignment">Assignment</label>
-										<input
-											id="demo-assignment"
-											bind:value={selectedAssignment}
-											placeholder="Optional assignment, e.g. interior attack"
-											class="h-10 rounded-md border bg-background px-3 text-sm"
-										/>
-										<p class="self-center text-xs text-muted-foreground">
-											{selectedUnitLabel}, then click a command box.
-										</p>
-									</div>
+									<p class="text-xs text-muted-foreground">
+										Tap a unit to manually assign a division and assignment. Radio dispatch is shown
+										below as a premium feature.
+									</p>
 								</div>
 							</div>
 
@@ -685,23 +963,38 @@
 													{column.header || 'Reserve'}
 												</div>
 												<div class="space-y-1 p-1">
-													<button
-														type="button"
-														disabled={!selectedUnitName}
-														onclick={() => placeSelectedUnit(column.key)}
-														class="min-h-9 w-full rounded border border-dashed px-1.5 py-1 text-[10px] leading-tight text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-													>
-														{selectedUnitName ? `Place ${selectedUnitName}` : 'Select unit'}
-													</button>
 													{#each entriesForColumn(boardEntries, column.key) as entry (entry.id)}
+														<div class="rounded border bg-card text-[10px] leading-tight">
+															<button
+																type="button"
+																onclick={() => openEdit(entry as DemoBoardEntry)}
+																class="w-full px-1.5 py-1 text-left transition-colors hover:bg-muted"
+																title="Click to edit this assignment"
+															>
+																<p class="font-medium">{formatUnitAssignmentLine(entry)}</p>
+															</button>
+															<button
+																type="button"
+																onclick={() => cycleEntryStatus(entry as DemoBoardEntry)}
+																class="m-1 mt-0 rounded px-1.5 py-0.5 text-left text-[9px] font-semibold {STATUS_COLORS[
+																	entry.status
+																] ?? 'bg-gray-100 text-gray-700'}"
+																title="Click to cycle status"
+															>
+																{entry.status}
+															</button>
+														</div>
+													{:else}
 														<button
 															type="button"
-															onclick={() => returnUnitToAvailable(entry as DemoBoardEntry)}
-															class="w-full rounded border bg-card px-1.5 py-1 text-left text-[10px] leading-tight transition-colors hover:bg-muted"
-															title="Click to return this unit to available units"
+															disabled={availableUnits.length === 0}
+															onclick={() => {
+																const unitName = availableUnits[0];
+																if (unitName) openDispatchSheet(unitName, column.key);
+															}}
+															class="min-h-9 w-full rounded border border-dashed px-1.5 py-1 text-[10px] leading-tight text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
 														>
-															<p class="font-medium">{formatUnitAssignmentLine(entry)}</p>
-															<p class="mt-0.5 text-muted-foreground">{entry.status}</p>
+															Add unit
 														</button>
 													{/each}
 												</div>
@@ -715,12 +1008,28 @@
 						<aside class="space-y-4">
 							<div class="rounded-lg border bg-background">
 								<div class="border-b px-3 py-2">
-									<h3 class="text-xs font-semibold tracking-wide uppercase">
-										Timeline ({timelineEvents.length})
-									</h3>
+									<div class="flex items-center justify-between gap-2">
+										<h3 class="text-xs font-semibold tracking-wide uppercase">
+											Timeline ({filteredTimelineEvents.length})
+										</h3>
+										<div class="flex flex-wrap gap-1">
+											{#each [{ id: 'all', label: 'All' }, { id: 'RADIO', label: 'Radio' }, { id: 'STAGE', label: 'Stage' }, { id: 'HAZARD', label: 'Hazard' }] as filter (filter.id)}
+												<button
+													type="button"
+													onclick={() => (timelineFilter = filter.id as typeof timelineFilter)}
+													class="rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors {timelineFilter ===
+													filter.id
+														? 'bg-foreground text-background'
+														: 'bg-muted text-muted-foreground hover:bg-muted/70'}"
+												>
+													{filter.label}
+												</button>
+											{/each}
+										</div>
+									</div>
 								</div>
 								<div use:timelineScrollContainer class="max-h-136 space-y-3 overflow-y-auto p-4">
-									{#each timelineEvents as event (event.id)}
+									{#each filteredTimelineEvents as event (event.id)}
 										<div class="grid grid-cols-[3.75rem_auto_minmax(0,1fr)] gap-3 text-sm">
 											<span class="shrink-0 font-mono text-muted-foreground">{event.time}</span>
 											<Badge variant="outline" class="h-fit shrink-0 text-[10px]"
@@ -734,15 +1043,31 @@
 
 							<div class="rounded-lg border bg-background">
 								<div class="border-b px-3 py-2">
-									<h3 class="text-xs font-semibold tracking-wide uppercase">Demo mode</h3>
+									<h3 class="text-xs font-semibold tracking-wide uppercase">
+										Radio - Push to Talk
+									</h3>
 								</div>
-								<div class="space-y-2 p-4">
+								<div class="flex flex-col items-center gap-2 p-4 text-center">
+									<button
+										type="button"
+										onclick={() => (premiumSheetOpen = true)}
+										aria-disabled="true"
+										class="relative flex h-16 w-16 touch-none items-center justify-center rounded-full border-4 border-red-300 bg-red-500/80 text-white transition-all hover:bg-red-500"
+										aria-label="Push to talk is a premium feature"
+									>
+										<MicIcon class="h-6 w-6" />
+										<span
+											class="absolute -top-2 -right-5 rounded-full border bg-background px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-sm"
+										>
+											Premium
+										</span>
+									</button>
 									<p class="text-xs font-medium text-foreground">
-										Local playback only. No radio controls are shown.
+										Radio is available in the full session.
 									</p>
 									<p class="text-[11px] leading-relaxed text-muted-foreground">
-										The preview does not create a trainer session, request microphone access,
-										process audio, or save command-board activity.
+										This preview shows the control without requesting microphone access or
+										processing audio.
 									</p>
 								</div>
 							</div>
@@ -780,6 +1105,163 @@
 				</section>
 			</div>
 		</main>
+
+		<Sheet.Root bind:open={dispatchSheetOpen}>
+			<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+				<Sheet.Header class="text-left">
+					<Sheet.Title class="text-base">Dispatch {dispatchUnitName}</Sheet.Title>
+					<Sheet.Description class="text-xs">
+						Pick a division and assignment. This updates the demo board locally.
+					</Sheet.Description>
+				</Sheet.Header>
+				<div class="space-y-3 px-4">
+					<div>
+						<p class="mb-1 text-xs font-medium">Division</p>
+						<div class="flex flex-wrap gap-1.5">
+							{#each DIVISION_CHOICES as division (division)}
+								<button
+									type="button"
+									onclick={() => (dispatchDivision = division)}
+									class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {dispatchDivision ===
+									division
+										? 'border-primary bg-primary text-primary-foreground'
+										: 'bg-background hover:bg-muted'}"
+								>
+									{division}
+								</button>
+							{/each}
+						</div>
+					</div>
+					<div>
+						<label for="dispatch-assignment" class="mb-1 block text-xs font-medium"
+							>Assignment</label
+						>
+						<Input
+							id="dispatch-assignment"
+							bind:value={dispatchAssignment}
+							placeholder="e.g. search, vent, RIC"
+							class="h-11"
+						/>
+						<div class="mt-1.5 flex flex-wrap gap-1.5">
+							{#each ASSIGNMENT_SUGGESTIONS as suggestion (suggestion)}
+								<button
+									type="button"
+									onclick={() => (dispatchAssignment = suggestion)}
+									class="min-h-8 rounded-full border bg-background px-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+								>
+									{suggestion}
+								</button>
+							{/each}
+						</div>
+					</div>
+				</div>
+				<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pt-0 pb-2">
+					<Button
+						variant="outline"
+						size="sm"
+						class="min-h-10"
+						onclick={() => (dispatchSheetOpen = false)}
+					>
+						Cancel
+					</Button>
+					<Button size="sm" class="min-h-10" onclick={submitDispatch}>Dispatch</Button>
+				</Sheet.Footer>
+			</Sheet.Content>
+		</Sheet.Root>
+
+		<Sheet.Root
+			bind:open={editSheetOpen}
+			onOpenChange={(isOpen) => {
+				if (!isOpen) closeEdit();
+			}}
+		>
+			<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+				<Sheet.Header class="text-left">
+					<Sheet.Title class="text-base">Edit {editingEntry?.unitName ?? 'unit'}</Sheet.Title>
+					<Sheet.Description class="text-xs">
+						Correct the assignment or return this unit to available resources.
+					</Sheet.Description>
+				</Sheet.Header>
+				<div class="space-y-3 px-4">
+					<div>
+						<p class="mb-1 text-xs font-medium">Division</p>
+						<div class="flex flex-wrap gap-1.5">
+							{#each DIVISION_CHOICES as division (division)}
+								<button
+									type="button"
+									onclick={() => (editDivision = division)}
+									class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editDivision ===
+									division
+										? 'border-primary bg-primary text-primary-foreground'
+										: 'bg-background hover:bg-muted'}"
+								>
+									{division}
+								</button>
+							{/each}
+						</div>
+					</div>
+					<div>
+						<label for="edit-assignment" class="mb-1 block text-xs font-medium">Assignment</label>
+						<Input id="edit-assignment" bind:value={editAssignment} class="h-11" />
+					</div>
+					<div>
+						<p class="mb-1 text-xs font-medium">Status</p>
+						<div class="flex flex-wrap gap-1.5">
+							{#each STATUS_CHOICES as status (status)}
+								<button
+									type="button"
+									onclick={() => (editStatus = status)}
+									class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editStatus ===
+									status
+										? `border-transparent ${STATUS_COLORS[status] ?? 'bg-foreground text-background'}`
+										: 'bg-background hover:bg-muted'}"
+								>
+									{status}
+								</button>
+							{/each}
+						</div>
+					</div>
+				</div>
+				<Sheet.Footer class="flex flex-row flex-wrap justify-end gap-2 px-4 pt-0 pb-2">
+					<Button
+						variant="outline"
+						size="sm"
+						class="min-h-10"
+						onclick={returnEditingUnitToAvailable}
+					>
+						Return to available
+					</Button>
+					<Button variant="outline" size="sm" class="min-h-10" onclick={closeEdit}>Cancel</Button>
+					<Button size="sm" class="min-h-10" onclick={saveEdit}>Save</Button>
+				</Sheet.Footer>
+			</Sheet.Content>
+		</Sheet.Root>
+
+		<Sheet.Root bind:open={premiumSheetOpen}>
+			<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+				<Sheet.Header class="text-left">
+					<Sheet.Title class="text-base">Radio dispatch is premium</Sheet.Title>
+					<Sheet.Description class="text-xs">
+						Create an account to use AI-parsed radio commands in the full self-paced session.
+					</Sheet.Description>
+				</Sheet.Header>
+				<div class="px-4 text-sm text-muted-foreground">
+					The demo keeps microphone access off, but shows where push-to-talk lives in the live
+					simulation.
+				</div>
+				<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pt-0 pb-2">
+					<Button
+						variant="outline"
+						size="sm"
+						class="min-h-10"
+						onclick={() => (premiumSheetOpen = false)}
+					>
+						Keep previewing
+					</Button>
+					<Button size="sm" class="min-h-10" href={individualSignupHref}>Start 7-day trial</Button>
+				</Sheet.Footer>
+			</Sheet.Content>
+		</Sheet.Root>
 
 		<LandingFooter />
 	</div>
