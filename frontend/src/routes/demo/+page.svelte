@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { LandingFooter, LandingHeader } from '$lib/components/landing';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -499,6 +499,10 @@
 	onDestroy(() => {
 		stopClock();
 	});
+
+	onMount(() => {
+		handleStartDemo();
+	});
 </script>
 
 <svelte:head>
@@ -521,11 +525,11 @@
 </svelte:head>
 
 <div class="min-h-screen bg-muted/25 text-foreground">
-	<div class="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
+	<div class="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
 		<LandingHeader {monthlyPrice} />
 
 		<main class="py-12 sm:py-16">
-			<div class="mx-auto max-w-6xl">
+			<div class="mx-auto max-w-7xl">
 				<header class="max-w-3xl">
 					<p class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">
 						Two-minute command preview
@@ -572,7 +576,7 @@
 						</div>
 					</div>
 
-					<div class="grid gap-4 p-4 sm:p-5 lg:grid-cols-[2fr_1fr]">
+					<div class="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,500px)]">
 						<div class="space-y-4">
 							<div class="overflow-hidden rounded-lg border bg-muted/20">
 								<div class="relative flex h-56 items-end bg-muted p-4 sm:h-64">
@@ -711,6 +715,25 @@
 						<aside class="space-y-4">
 							<div class="rounded-lg border bg-background">
 								<div class="border-b px-3 py-2">
+									<h3 class="text-xs font-semibold tracking-wide uppercase">
+										Timeline ({timelineEvents.length})
+									</h3>
+								</div>
+								<div use:timelineScrollContainer class="max-h-136 space-y-3 overflow-y-auto p-4">
+									{#each timelineEvents as event (event.id)}
+										<div class="grid grid-cols-[3.75rem_auto_minmax(0,1fr)] gap-3 text-sm">
+											<span class="shrink-0 font-mono text-muted-foreground">{event.time}</span>
+											<Badge variant="outline" class="h-fit shrink-0 text-[10px]"
+												>{event.type}</Badge
+											>
+											<p class="min-w-0 leading-6 wrap-break-word">{event.text}</p>
+										</div>
+									{/each}
+								</div>
+							</div>
+
+							<div class="rounded-lg border bg-background">
+								<div class="border-b px-3 py-2">
 									<h3 class="text-xs font-semibold tracking-wide uppercase">Demo mode</h3>
 								</div>
 								<div class="space-y-2 p-4">
@@ -721,25 +744,6 @@
 										The preview does not create a trainer session, request microphone access,
 										process audio, or save command-board activity.
 									</p>
-								</div>
-							</div>
-
-							<div class="rounded-lg border bg-background">
-								<div class="border-b px-3 py-2">
-									<h3 class="text-xs font-semibold tracking-wide uppercase">
-										Timeline ({timelineEvents.length})
-									</h3>
-								</div>
-								<div use:timelineScrollContainer class="max-h-72 space-y-2 overflow-y-auto p-3">
-									{#each timelineEvents as event (event.id)}
-										<div class="flex gap-2 text-xs">
-											<span class="shrink-0 font-mono text-muted-foreground">{event.time}</span>
-											<Badge variant="outline" class="h-fit shrink-0 text-[10px]"
-												>{event.type}</Badge
-											>
-											<p class="leading-5">{event.text}</p>
-										</div>
-									{/each}
 								</div>
 							</div>
 						</aside>
