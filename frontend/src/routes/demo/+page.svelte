@@ -30,6 +30,12 @@
 		status: string;
 	}
 
+	interface DemoScenarioResource {
+		unitName: string;
+		status?: string;
+		offsetSeconds?: number;
+	}
+
 	interface DemoScriptEvent {
 		id: string;
 		atSecond: number;
@@ -67,6 +73,7 @@
 	const demoJsonLdScript =
 		'<scr' + `ipt type="application/ld+json">${toJsonLd(demoJsonLd)}</scr` + 'ipt>';
 
+	const DEMO_PREVIEW_SECONDS = 120;
 	const FALLBACK_AVAILABLE_UNITS = ['E1', 'E2', 'T1', 'R1', 'BC1', 'MED1'];
 
 	const stageLabels: Record<StageKey, string> = {
@@ -201,10 +208,12 @@
 
 	function scriptFromSelectedScenario(): DemoScriptEvent[] {
 		const timeline = data.demoScenario?.selfPacedConfigJson?.timeline ?? [];
-		if (timeline.length === 0) return fallbackDemoScript;
+		if (timeline.length === 0)
+			return fallbackDemoScript.filter((event) => event.atSecond <= DEMO_PREVIEW_SECONDS);
 
 		return [...timeline]
 			.sort((a, b) => a.offsetSeconds - b.offsetSeconds)
+			.filter((event) => Math.max(0, event.offsetSeconds ?? 0) <= DEMO_PREVIEW_SECONDS)
 			.map((event, index) => {
 				const dispatch = event.dispatch ?? {};
 				const stage = isStageKey(dispatch.stage) ? dispatch.stage : undefined;
@@ -231,8 +240,35 @@
 			});
 	}
 
+	function scriptedArrivalResources(): DemoScenarioResource[] {
+		const timeline = data.demoScenario?.selfPacedConfigJson?.timeline ?? [];
+		const arrivals: DemoScenarioResource[] = [];
+		for (const event of timeline) {
+			const unitName = parseArrivalUnit(event.label);
+			if (!unitName) continue;
+			const offsetSeconds =
+				typeof event.offsetSeconds === 'number' && Number.isFinite(event.offsetSeconds)
+					? Math.max(0, Math.floor(event.offsetSeconds))
+					: 0;
+			if (offsetSeconds > DEMO_PREVIEW_SECONDS) continue;
+			const existing = arrivals.find((arrival) => arrival.unitName === unitName);
+			if (existing && (existing.offsetSeconds ?? 0) <= offsetSeconds) continue;
+			const nextArrival = { unitName, status: 'available', offsetSeconds };
+			if (existing) {
+				arrivals.splice(arrivals.indexOf(existing), 1, nextArrival);
+			} else {
+				arrivals.push(nextArrival);
+			}
+		}
+		return arrivals.sort(
+			(a, b) =>
+				(a.offsetSeconds ?? 0) - (b.offsetSeconds ?? 0) || a.unitName.localeCompare(b.unitName)
+		);
+	}
+
 	function initialAvailableUnits(): string[] {
 		if (!data.demoScenario) return [...FALLBACK_AVAILABLE_UNITS];
+		if ((data.demoScenario.selfPacedConfigJson?.timeline ?? []).length > 0) return [];
 		return data.demoScenario.defaultResources.map((resource) => resource.unitName).filter(Boolean);
 	}
 
@@ -250,7 +286,7 @@
 		{
 			id: 'intro',
 			type: 'INFO',
-			text: 'Press Start Demo to preview a low-resource self-paced run.',
+			text: 'Press Start Demo to watch the first two minutes of the self-paced run.',
 			time: '00:00'
 		}
 	]);
@@ -258,12 +294,19 @@
 	let clockInterval: ReturnType<typeof setInterval> | null = null;
 	let timelineScrollEls: HTMLDivElement[] = [];
 	const activeDemoScript = $derived(scriptFromSelectedScenario());
-	const demoDurationSeconds = $derived(
-		Math.max(60, ...activeDemoScript.map((event) => event.atSecond + 14))
+	const demoDurationSeconds = DEMO_PREVIEW_SECONDS;
+	const visibleScenarioResources = $derived(scriptedArrivalResources());
+	const hasPendingScriptedArrivals = $derived(
+		visibleScenarioResources.some(
+			(resource) =>
+				(resource.offsetSeconds ?? 0) > sessionSeconds &&
+				!boardEntries.some((entry) => entry.unitName === resource.unitName)
+		)
 	);
 	const scenarioTitle = $derived(data.demoScenario?.title ?? 'Residential Working Fire (Demo)');
 	const scenarioDescription = $derived(
-		data.demoScenario?.description ?? 'Local-only playback of the self-paced Command interface.'
+		data.demoScenario?.description ??
+			'Local-only two-minute playback of the self-paced Command interface.'
 	);
 	const currentSideImage = $derived.by(() => {
 		const scenario = data.demoScenario;
@@ -329,7 +372,7 @@
 				isPaused = true;
 				addTimelineEvent(
 					'END',
-					'Demo timeline complete. Reset to run it again.',
+					'Two-minute preview complete. Create an account to run the full simulation.',
 					demoDurationSeconds
 				);
 			}
@@ -389,7 +432,7 @@
 			{
 				id: 'intro',
 				type: 'INFO',
-				text: 'Press Start Demo to preview a low-resource self-paced run.',
+				text: 'Press Start Demo to watch the first two minutes of the self-paced run.',
 				time: '00:00'
 			}
 		];
@@ -399,7 +442,7 @@
 		if (hasStarted) return;
 		hasStarted = true;
 		isPaused = false;
-		addTimelineEvent('START', 'Demo run started. Timeline events are running locally.');
+		addTimelineEvent('START', 'Simulation started. Preview is running locally for two minutes.');
 		runDueScriptEvents();
 		startClock();
 	}
@@ -485,14 +528,15 @@
 			<div class="mx-auto max-w-6xl">
 				<header class="max-w-3xl">
 					<p class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-						Command preview
+						Two-minute command preview
 					</p>
 					<h1 class="mt-4 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-						Interactive self-paced demo without backend resource usage.
+						Watch the first two minutes of the real self-paced simulation.
 					</h1>
 					<p class="mt-5 text-base leading-7 text-muted-foreground sm:text-lg">
-						This page mirrors the Command experience using local timeline playback only. Radio
-						processing, session creation, and AI services are disabled in demo mode.
+						This page plays the selected authored simulation locally through 02:00. It shows the
+						Command board and scenario timeline without creating a session, saving activity, or
+						enabling radio processing.
 					</p>
 				</header>
 
@@ -508,13 +552,13 @@
 								<Badge variant="outline">{stageLabels[currentStage]}</Badge>
 								<Badge variant="outline">{sideLabels[currentSide]}</Badge>
 								<span class="font-mono text-sm text-muted-foreground"
-									>{formatClock(sessionSeconds)}</span
+									>{formatClock(sessionSeconds)} / 02:00</span
 								>
 							</div>
 						</div>
 						<div class="mt-4 flex flex-wrap gap-2">
 							<Button class="min-h-11" disabled={hasStarted} onclick={handleStartDemo}>
-								Start Demo
+								Start Scenario
 							</Button>
 							<Button
 								class="min-h-11"
@@ -601,7 +645,9 @@
 										</div>
 									{:else}
 										<p class="text-xs text-muted-foreground">
-											No default resources configured for this simulation.
+											{hasPendingScriptedArrivals
+												? 'Waiting on scripted arrivals.'
+												: 'No available units in this preview.'}
 										</p>
 									{/if}
 									<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -665,36 +711,15 @@
 						<aside class="space-y-4">
 							<div class="rounded-lg border bg-background">
 								<div class="border-b px-3 py-2">
-									<h3 class="text-xs font-semibold tracking-wide uppercase">
-										Radio - Push to Talk
-									</h3>
+									<h3 class="text-xs font-semibold tracking-wide uppercase">Demo mode</h3>
 								</div>
-								<div class="space-y-3 p-4 text-center">
-									<button
-										type="button"
-										class="mx-auto flex h-16 w-16 cursor-not-allowed items-center justify-center rounded-full border-4 border-red-400 bg-red-500/80 text-white opacity-70"
-										disabled
-										aria-label="Radio disabled in demo mode"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											class="h-5 w-5"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										>
-											<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-											<path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-											<line x1="12" x2="12" y1="19" y2="22" />
-										</svg>
-									</button>
-									<p class="text-xs font-medium text-foreground">Radio processing disabled</p>
+								<div class="space-y-2 p-4">
+									<p class="text-xs font-medium text-foreground">
+										Local playback only. No radio controls are shown.
+									</p>
 									<p class="text-[11px] leading-relaxed text-muted-foreground">
-										Demo mode does not request microphone access or process audio. This keeps usage
-										low while still showing the Command workflow.
+										The preview does not create a trainer session, request microphone access,
+										process audio, or save command-board activity.
 									</p>
 								</div>
 							</div>

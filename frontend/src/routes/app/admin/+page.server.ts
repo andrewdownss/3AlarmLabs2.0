@@ -16,26 +16,54 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-	const [userCountResult, orgCountResult, newUserCountResult, orgPlanCountsRaw, libraryScenarios] =
-		await Promise.all([
-			db.select({ value: count() }).from(userTable),
-			db.select({ value: count() }).from(organizations),
-			db.select({ value: count() }).from(userTable).where(gt(userTable.createdAt, since)),
-			db
-				.select({ planId: organizations.planId, value: count() })
-				.from(organizations)
-				.groupBy(organizations.planId),
-			db.query.trainerScenarios.findMany({
-				where: eq(trainerScenarios.isLibrary, true),
-				orderBy: [desc(trainerScenarios.isDemoScenario), desc(trainerScenarios.updatedAt)],
-				columns: {
-					id: true,
-					title: true,
-					publishedAt: true,
-					isDemoScenario: true
+	const [
+		userCountResult,
+		orgCountResult,
+		newUserCountResult,
+		orgPlanCountsRaw,
+		libraryScenarios,
+		userSimulations
+	] = await Promise.all([
+		db.select({ value: count() }).from(userTable),
+		db.select({ value: count() }).from(organizations),
+		db.select({ value: count() }).from(userTable).where(gt(userTable.createdAt, since)),
+		db
+			.select({ planId: organizations.planId, value: count() })
+			.from(organizations)
+			.groupBy(organizations.planId),
+		db.query.trainerScenarios.findMany({
+			where: eq(trainerScenarios.isLibrary, true),
+			orderBy: [desc(trainerScenarios.isDemoScenario), desc(trainerScenarios.updatedAt)],
+			columns: {
+				id: true,
+				title: true,
+				publishedAt: true,
+				isDemoScenario: true
+			}
+		}),
+		db.query.trainerScenarios.findMany({
+			where: eq(trainerScenarios.isLibrary, false),
+			orderBy: [desc(trainerScenarios.updatedAt)],
+			limit: 100,
+			columns: {
+				id: true,
+				title: true,
+				description: true,
+				constructionType: true,
+				alarmLevel: true,
+				createdAt: true,
+				updatedAt: true
+			},
+			with: {
+				creator: {
+					columns: { id: true, name: true, email: true }
+				},
+				organization: {
+					columns: { id: true, name: true, planId: true }
 				}
-			})
-		]);
+			}
+		})
+	]);
 
 	const orgPlanCounts = (orgPlanCountsRaw ?? []).map((row) => ({
 		planId: row.planId as PlanId,
@@ -48,7 +76,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		organizationCount: orgCountResult[0]?.value ?? 0,
 		orgPlanCounts,
 		libraryScenarios,
-		demoScenario: libraryScenarios.find((scenario) => scenario.isDemoScenario) ?? null
+		demoScenario: libraryScenarios.find((scenario) => scenario.isDemoScenario) ?? null,
+		userSimulations
 	};
 };
 
