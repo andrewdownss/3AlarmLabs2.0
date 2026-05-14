@@ -774,33 +774,35 @@
 </svelte:head>
 
 <div class="min-h-screen bg-muted/25 text-foreground">
-	<div class="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
+	<div class="mx-auto max-w-7xl px-3 sm:px-8 lg:px-10">
 		<LandingHeader {monthlyPrice} />
 
-		<main class="py-12 sm:py-16">
+		<main class="py-6 sm:py-16">
 			<div class="mx-auto max-w-7xl">
 				<header class="max-w-3xl">
 					<p class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">
 						Two-minute command preview
 					</p>
-					<h1 class="mt-4 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+					<h1
+						class="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:mt-4 sm:text-5xl"
+					>
 						Watch the first two minutes of the real self-paced simulation.
 					</h1>
-					<p class="mt-5 text-base leading-7 text-muted-foreground sm:text-lg">
+					<p class="mt-4 text-sm leading-6 text-muted-foreground sm:mt-5 sm:text-lg sm:leading-7">
 						This page plays the selected authored simulation locally through 02:00. It shows the
 						Command board and scenario timeline without creating a session, saving activity, or
 						enabling radio processing.
 					</p>
 				</header>
 
-				<section class="mt-8 rounded-xl border bg-card shadow-sm">
+				<section class="mt-6 overflow-hidden rounded-xl border bg-card shadow-sm sm:mt-8">
 					<div class="border-b px-4 py-4 sm:px-5">
 						<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 							<div class="min-w-0">
 								<h2 class="truncate text-lg font-semibold">{scenarioTitle}</h2>
 								<p class="mt-1 line-clamp-2 text-sm text-muted-foreground">{scenarioDescription}</p>
 							</div>
-							<div class="flex flex-wrap items-center gap-2">
+							<div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
 								<Badge class="bg-green-500 text-white">{isPaused ? 'PAUSED' : 'LIVE'}</Badge>
 								<Badge variant="outline">{stageLabels[currentStage]}</Badge>
 								<Badge variant="outline">{sideLabels[currentSide]}</Badge>
@@ -809,30 +811,35 @@
 								>
 							</div>
 						</div>
-						<div class="mt-4 flex flex-wrap gap-2">
-							<Button class="min-h-11" disabled={hasStarted} onclick={handleStartDemo}>
+						<div class="mt-4 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+							<Button class="min-h-11 px-2" disabled={hasStarted} onclick={handleStartDemo}>
 								Start Scenario
 							</Button>
 							<Button
-								class="min-h-11"
+								class="min-h-11 px-2"
 								variant="outline"
 								disabled={!hasStarted}
 								onclick={handlePauseResume}
 							>
 								{isPaused ? 'Resume' : 'Pause'}
 							</Button>
-							<Button class="min-h-11" variant="outline" onclick={handleResetDemo}>Reset</Button>
+							<Button class="min-h-11 px-2" variant="outline" onclick={handleResetDemo}
+								>Reset</Button
+							>
 						</div>
 					</div>
 
-					<div class="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,500px)]">
+					<div class="grid gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,500px)]">
 						<div class="space-y-4">
 							<div class="overflow-hidden rounded-lg border bg-muted/20">
-								<div bind:clientWidth={demoSceneShelfW} class="flex justify-center bg-muted/30 p-2">
+								<div
+									bind:clientWidth={demoSceneShelfW}
+									class="flex justify-center bg-muted/30 p-1 sm:p-2"
+								>
 									<div
 										class="relative overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/60 {demoSceneSizedStyle
 											? ''
-											: 'h-[min(48vh,460px)] w-full sm:h-[min(52vh,520px)]'}"
+											: 'h-[min(38vh,360px)] w-full sm:h-[min(52vh,520px)]'}"
 										style={demoSceneSizedStyle}
 									>
 										{#if currentSideImage && hasOverlays}
@@ -868,11 +875,13 @@
 											></div>
 										{/if}
 										<div
-											class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/75 via-black/25 to-transparent p-4"
+											class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/75 via-black/25 to-transparent p-3 sm:p-4"
 										>
 											<p class="text-sm font-semibold text-white">{scenarioTitle}</p>
 											{#if data.demoScenario?.dispatchNotes}
-												<p class="mt-1 line-clamp-2 text-xs whitespace-pre-line text-white/85">
+												<p
+													class="mt-1 line-clamp-1 text-xs whitespace-pre-line text-white/85 sm:line-clamp-2"
+												>
 													{data.demoScenario.dispatchNotes}
 												</p>
 											{:else}
@@ -883,13 +892,15 @@
 										</div>
 										<div class="absolute top-3 right-3 z-20 flex gap-1.5">
 											<span
-												class="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white {stageBadgeClass[
+												class="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white sm:text-[11px] {stageBadgeClass[
 													currentStage
 												]}"
 											>
 												{stageLabels[currentStage]}
 											</span>
-											<span class="rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
+											<span
+												class="rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white sm:text-[11px]"
+											>
 												{sideLabels[currentSide]}
 											</span>
 										</div>
@@ -898,7 +909,7 @@
 												class="absolute inset-0 z-30 flex items-center justify-center bg-black/55 p-4"
 											>
 												<div
-													class="max-w-sm rounded-xl border border-white/20 bg-background p-5 text-center shadow-xl"
+													class="max-w-sm rounded-xl border border-white/20 bg-background p-4 text-center shadow-xl sm:p-5"
 												>
 													<h3 class="text-lg font-semibold">Two-minute preview complete</h3>
 													<p class="mt-2 text-sm text-muted-foreground">
@@ -906,8 +917,12 @@
 														dispatch and after-action review.
 													</p>
 													<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-														<Button href={individualSignupHref}>Start 7-day trial</Button>
-														<Button variant="outline" href="/pricing">See pricing</Button>
+														<Button class="min-h-11" href={individualSignupHref}
+															>Start 7-day trial</Button
+														>
+														<Button class="min-h-11" variant="outline" href="/pricing"
+															>See pricing</Button
+														>
 													</div>
 												</div>
 											</div>
@@ -922,14 +937,15 @@
 								</div>
 								<div class="space-y-3 px-3 py-3">
 									{#if availableUnits.length > 0}
-										<div class="flex flex-wrap gap-2">
+										<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
 											{#each availableUnits as unit (unit)}
 												<button
 													type="button"
 													onclick={() => openDispatchSheet(unit)}
-													class="rounded-md border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
+													class="min-h-11 rounded-md border bg-secondary px-3 py-2 text-left text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 sm:min-h-0 sm:px-2.5 sm:py-1"
 												>
-													{unit} <span class="text-muted-foreground">Dispatch</span>
+													<span class="block text-sm sm:inline sm:text-xs">{unit}</span>
+													<span class="text-muted-foreground">Dispatch</span>
 												</button>
 											{/each}
 										</div>
@@ -953,7 +969,68 @@
 										Incident Command Board
 									</h3>
 								</div>
-								<div class="overflow-x-auto p-2">
+								<div class="space-y-3 p-3 sm:hidden">
+									{#if boardEntries.length > 0}
+										<div class="space-y-2">
+											{#each boardEntries as entry (entry.id)}
+												<div class="rounded-xl border bg-card p-3">
+													<div class="flex items-start justify-between gap-2">
+														<button
+															type="button"
+															onclick={() => openEdit(entry)}
+															class="min-w-0 flex-1 text-left"
+														>
+															<p class="truncate text-sm font-semibold">{entry.unitName}</p>
+															<p class="mt-0.5 truncate text-xs text-muted-foreground">
+																{entry.division}{entry.assignment ? ` · ${entry.assignment}` : ''}
+															</p>
+														</button>
+														<button
+															type="button"
+															onclick={() => cycleEntryStatus(entry)}
+															class="min-h-9 shrink-0 rounded-full px-2.5 text-[11px] font-semibold {STATUS_COLORS[
+																entry.status
+															] ?? 'bg-gray-100 text-gray-700'}"
+														>
+															{entry.status}
+														</button>
+													</div>
+												</div>
+											{/each}
+										</div>
+									{:else}
+										<div class="rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center">
+											<p class="text-sm font-medium">No units assigned yet</p>
+											<p class="mt-1 text-xs text-muted-foreground">
+												Tap an available unit or choose a division below.
+											</p>
+										</div>
+									{/if}
+
+									<div>
+										<p
+											class="mb-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
+										>
+											Quick add to division
+										</p>
+										<div class="grid grid-cols-2 gap-2">
+											{#each DIVISION_CHOICES as division (division)}
+												<button
+													type="button"
+													disabled={availableUnits.length === 0}
+													onclick={() => {
+														const unitName = availableUnits[0];
+														if (unitName) openDispatchSheet(unitName, division);
+													}}
+													class="min-h-11 rounded-lg border border-dashed bg-background px-3 text-left text-xs font-medium transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+												>
+													{division}
+												</button>
+											{/each}
+										</div>
+									</div>
+								</div>
+								<div class="hidden overflow-x-auto p-2 sm:block">
 									<div class="flex min-w-[760px] gap-1">
 										{#each COMMAND_BOARD_COLUMNS as column (column.key)}
 											<div class="min-h-40 w-24 rounded border bg-muted/20">
@@ -1005,8 +1082,8 @@
 							</div>
 						</div>
 
-						<aside class="space-y-4">
-							<div class="rounded-lg border bg-background">
+						<aside class="flex flex-col gap-4">
+							<div class="order-2 rounded-lg border bg-background lg:order-0">
 								<div class="border-b px-3 py-2">
 									<div class="flex items-center justify-between gap-2">
 										<h3 class="text-xs font-semibold tracking-wide uppercase">
@@ -1028,9 +1105,14 @@
 										</div>
 									</div>
 								</div>
-								<div use:timelineScrollContainer class="max-h-136 space-y-3 overflow-y-auto p-4">
+								<div
+									use:timelineScrollContainer
+									class="max-h-72 space-y-3 overflow-y-auto p-3 sm:max-h-136 sm:p-4"
+								>
 									{#each filteredTimelineEvents as event (event.id)}
-										<div class="grid grid-cols-[3.75rem_auto_minmax(0,1fr)] gap-3 text-sm">
+										<div
+											class="grid grid-cols-[3.25rem_auto_minmax(0,1fr)] gap-2 text-xs sm:grid-cols-[3.75rem_auto_minmax(0,1fr)] sm:gap-3 sm:text-sm"
+										>
 											<span class="shrink-0 font-mono text-muted-foreground">{event.time}</span>
 											<Badge variant="outline" class="h-fit shrink-0 text-[10px]"
 												>{event.type}</Badge
@@ -1041,34 +1123,40 @@
 								</div>
 							</div>
 
-							<div class="rounded-lg border bg-background">
+							<div class="order-1 rounded-lg border bg-background lg:order-0">
 								<div class="border-b px-3 py-2">
 									<h3 class="text-xs font-semibold tracking-wide uppercase">
 										Radio - Push to Talk
 									</h3>
 								</div>
-								<div class="flex flex-col items-center gap-2 p-4 text-center">
-									<button
-										type="button"
-										onclick={() => (premiumSheetOpen = true)}
-										aria-disabled="true"
-										class="relative flex h-16 w-16 touch-none items-center justify-center rounded-full border-4 border-red-300 bg-red-500/80 text-white transition-all hover:bg-red-500"
-										aria-label="Push to talk is a premium feature"
-									>
-										<MicIcon class="h-6 w-6" />
-										<span
-											class="absolute -top-2 -right-5 rounded-full border bg-background px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-sm"
+								<div
+									class="flex items-center gap-4 p-3 text-left sm:flex-col sm:gap-2 sm:p-4 sm:text-center"
+								>
+									<div class="flex shrink-0 flex-col items-center">
+										<button
+											type="button"
+											onclick={() => (premiumSheetOpen = true)}
+											aria-disabled="true"
+											class="relative flex h-16 w-16 touch-none items-center justify-center rounded-full border-4 border-red-300 bg-red-500/80 text-white transition-all hover:bg-red-500"
+											aria-label="Push to talk is a premium feature"
 										>
-											Premium
-										</span>
-									</button>
-									<p class="text-xs font-medium text-foreground">
-										Radio is available in the full session.
-									</p>
-									<p class="text-[11px] leading-relaxed text-muted-foreground">
-										This preview shows the control without requesting microphone access or
-										processing audio.
-									</p>
+											<MicIcon class="h-6 w-6" />
+											<span
+												class="absolute -top-2 -right-5 rounded-full border bg-background px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-sm"
+											>
+												Premium
+											</span>
+										</button>
+									</div>
+									<div class="min-w-0">
+										<p class="text-xs font-medium text-foreground">
+											Radio is available in the full session.
+										</p>
+										<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+											This preview shows the control without requesting microphone access or
+											processing audio.
+										</p>
+									</div>
 								</div>
 							</div>
 						</aside>
@@ -1107,7 +1195,10 @@
 		</main>
 
 		<Sheet.Root bind:open={dispatchSheetOpen}>
-			<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+			<Sheet.Content
+				side="bottom"
+				class="max-h-[90dvh] overflow-y-auto rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]"
+			>
 				<Sheet.Header class="text-left">
 					<Sheet.Title class="text-base">Dispatch {dispatchUnitName}</Sheet.Title>
 					<Sheet.Description class="text-xs">
@@ -1122,7 +1213,7 @@
 								<button
 									type="button"
 									onclick={() => (dispatchDivision = division)}
-									class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {dispatchDivision ===
+									class="min-h-10 rounded-full border px-3 text-xs font-medium transition-colors {dispatchDivision ===
 									division
 										? 'border-primary bg-primary text-primary-foreground'
 										: 'bg-background hover:bg-muted'}"
@@ -1147,7 +1238,7 @@
 								<button
 									type="button"
 									onclick={() => (dispatchAssignment = suggestion)}
-									class="min-h-8 rounded-full border bg-background px-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+									class="min-h-9 rounded-full border bg-background px-2.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
 								>
 									{suggestion}
 								</button>
@@ -1175,7 +1266,10 @@
 				if (!isOpen) closeEdit();
 			}}
 		>
-			<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+			<Sheet.Content
+				side="bottom"
+				class="max-h-[90dvh] overflow-y-auto rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]"
+			>
 				<Sheet.Header class="text-left">
 					<Sheet.Title class="text-base">Edit {editingEntry?.unitName ?? 'unit'}</Sheet.Title>
 					<Sheet.Description class="text-xs">
@@ -1190,7 +1284,7 @@
 								<button
 									type="button"
 									onclick={() => (editDivision = division)}
-									class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editDivision ===
+									class="min-h-10 rounded-full border px-3 text-xs font-medium transition-colors {editDivision ===
 									division
 										? 'border-primary bg-primary text-primary-foreground'
 										: 'bg-background hover:bg-muted'}"
@@ -1211,7 +1305,7 @@
 								<button
 									type="button"
 									onclick={() => (editStatus = status)}
-									class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editStatus ===
+									class="min-h-10 rounded-full border px-3 text-xs font-medium transition-colors {editStatus ===
 									status
 										? `border-transparent ${STATUS_COLORS[status] ?? 'bg-foreground text-background'}`
 										: 'bg-background hover:bg-muted'}"
@@ -1238,7 +1332,10 @@
 		</Sheet.Root>
 
 		<Sheet.Root bind:open={premiumSheetOpen}>
-			<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+			<Sheet.Content
+				side="bottom"
+				class="max-h-[90dvh] overflow-y-auto rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]"
+			>
 				<Sheet.Header class="text-left">
 					<Sheet.Title class="text-base">Radio dispatch is premium</Sheet.Title>
 					<Sheet.Description class="text-xs">
