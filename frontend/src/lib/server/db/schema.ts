@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
 	pgTable,
 	text,
@@ -282,6 +282,7 @@ export const trainerScenarios = pgTable(
 			.notNull()
 			.default([]),
 		isLibrary: boolean('is_library').default(false).notNull(),
+		isDemoScenario: boolean('is_demo_scenario').default(false).notNull(),
 		publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
 		createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
@@ -292,7 +293,10 @@ export const trainerScenarios = pgTable(
 	(table) => [
 		index('trainer_scenarios_created_by_idx').on(table.createdBy),
 		index('trainer_scenarios_org_id_idx').on(table.organizationId),
-		index('trainer_scenarios_library_published_idx').on(table.isLibrary, table.publishedAt)
+		index('trainer_scenarios_library_published_idx').on(table.isLibrary, table.publishedAt),
+		uniqueIndex('trainer_scenarios_single_demo_idx')
+			.on(table.isDemoScenario)
+			.where(sql`${table.isDemoScenario} = true`)
 	]
 );
 
