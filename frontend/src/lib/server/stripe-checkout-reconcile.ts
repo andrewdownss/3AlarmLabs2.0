@@ -5,7 +5,8 @@ import { getStripe } from '$lib/server/stripe';
 import { applySubscriptionToOrganization } from '$lib/server/stripe-org-sync';
 
 /**
- * Applies subscription → org when the user lands on success_url with `{CHECKOUT_SESSION_ID}`.
+ * Applies subscription → org when the user lands after checkout with `{CHECKOUT_SESSION_ID}`
+ * (typically `/thank-you` or Billing with success query params).
  * Duplicates webhook work so local/dev works without Stripe CLI forwarding; production still relies on webhooks.
  */
 export async function reconcileCheckoutSession(params: {

@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			billingInterval: 'month',
 			customerEmail: locals.user.email,
 			stripeCustomerId: organization.stripeCustomerId,
-			successUrl: `${url.origin}/app/settings/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+			successUrl: `${url.origin}/thank-you?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
 			cancelUrl: `${url.origin}/pricing?checkout=cancel`
 		});
 	} catch (e) {

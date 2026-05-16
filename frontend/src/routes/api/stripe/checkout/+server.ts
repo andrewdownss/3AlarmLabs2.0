@@ -43,7 +43,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			billingInterval,
 			customerEmail: locals.user.email,
 			stripeCustomerId: org.stripeCustomerId,
-			successUrl: `${origin}/app/settings/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+			successUrl: `${origin}/thank-you?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
 			cancelUrl: `${origin}/app/settings/billing?checkout=cancel`
 		});
 	} catch (e) {
