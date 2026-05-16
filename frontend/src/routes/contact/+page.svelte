@@ -11,11 +11,11 @@
 	const canonicalUrl = toCanonicalUrl('/contact');
 
 	const supportMail =
-		'mailto:support@3alarmlabs.com?subject=' + encodeURIComponent('Support — 3AlarmLabs');
+		'mailto:andrew@3alarmlabs.com?subject=' + encodeURIComponent('Support — 3AlarmLabs');
 	const salesMail =
-		'mailto:sales@3alarmlabs.com?subject=' + encodeURIComponent('Sales inquiry — 3AlarmLabs');
+		'mailto:andrew@3alarmlabs.com?subject=' + encodeURIComponent('Sales inquiry — 3AlarmLabs');
 	const privacyMail =
-		'mailto:privacy@3alarmlabs.com?subject=' + encodeURIComponent('Privacy inquiry — 3AlarmLabs');
+		'mailto:andrew@3alarmlabs.com?subject=' + encodeURIComponent('Privacy inquiry — 3AlarmLabs');
 </script>
 
 <svelte:head>
@@ -65,7 +65,7 @@
 							class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline"
 							href={supportMail}
 						>
-							support@3alarmlabs.com
+							andrew@3alarmlabs.com
 						</a>
 					</article>
 
@@ -78,7 +78,7 @@
 							class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline"
 							href={salesMail}
 						>
-							sales@3alarmlabs.com
+							andrew@3alarmlabs.com
 						</a>
 					</article>
 
@@ -91,7 +91,7 @@
 							class="mt-4 block text-sm font-medium text-[#E85D20] hover:underline"
 							href={privacyMail}
 						>
-							privacy@3alarmlabs.com
+							andrew@3alarmlabs.com
 						</a>
 					</article>
 

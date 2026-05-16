@@ -110,7 +110,7 @@
 				class="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
 			>
 				We couldn’t verify this checkout for your workspace. If Stripe charged you,
-				<a href="mailto:support@3alarmlabs.com" class="font-medium underline">contact support</a>
+				<a href="mailto:andrew@3alarmlabs.com" class="font-medium underline">contact support</a>
 				with your receipt.
 			</p>
 		{:else}
@@ -136,8 +136,8 @@
 		<div class="rounded-xl border bg-card p-6 shadow-sm">
 			<p class="text-sm text-muted-foreground">
 				Only the organization owner can manage billing. Ask your lead to upgrade, or contact
-				<a href="mailto:support@3alarmlabs.com" class="font-medium underline"
-					>support@3alarmlabs.com</a
+				<a href="mailto:andrew@3alarmlabs.com" class="font-medium underline"
+					>andrew@3alarmlabs.com</a
 				>.
 			</p>
 		</div>
@@ -204,7 +204,7 @@
 										<Button
 											size="sm"
 											variant="outline"
-											href="mailto:sales@3alarmlabs.com?subject=Training%20Company%20pricing"
+											href="mailto:andrew@3alarmlabs.com?subject=Training%20Company%20pricing"
 										>
 											Contact sales
 										</Button>

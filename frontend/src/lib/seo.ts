@@ -23,14 +23,14 @@ export const organizationJsonLd = {
 	contactPoint: [
 		{
 			'@type': 'ContactPoint',
-			email: 'support@3alarmlabs.com',
+			email: 'andrew@3alarmlabs.com',
 			contactType: 'customer support',
 			areaServed: 'US',
 			availableLanguage: 'en'
 		},
 		{
 			'@type': 'ContactPoint',
-			email: 'sales@3alarmlabs.com',
+			email: 'andrew@3alarmlabs.com',
 			contactType: 'sales',
 			areaServed: 'US',
 			availableLanguage: 'en'

@@ -140,7 +140,7 @@
 						<li>Review and update your account information in Settings.</li>
 						<li>Delete specific scenarios, scenes, or sessions from within the app.</li>
 						<li>
-							Email <a href="mailto:privacy@3alarmlabs.com">privacy@3alarmlabs.com</a> to request a copy
+							Email <a href="mailto:andrew@3alarmlabs.com">andrew@3alarmlabs.com</a> to request a copy
 							or deletion of personal data, or to ask questions about this policy.
 						</li>
 					</ul>
@@ -159,9 +159,9 @@
 
 					<h2>Contact</h2>
 					<p>
-						Privacy questions: <a href="mailto:privacy@3alarmlabs.com">privacy@3alarmlabs.com</a
+						Privacy questions: <a href="mailto:andrew@3alarmlabs.com">andrew@3alarmlabs.com</a
 						>.<br />
-						General support: <a href="mailto:support@3alarmlabs.com">support@3alarmlabs.com</a>.
+						General support: <a href="mailto:andrew@3alarmlabs.com">andrew@3alarmlabs.com</a>.
 					</p>
 				</div>
 			</article>

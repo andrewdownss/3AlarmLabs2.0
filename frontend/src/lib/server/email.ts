@@ -2,7 +2,7 @@ import sgMail from '@sendgrid/mail';
 import { env } from '$env/dynamic/private';
 
 const apiKey = env.SENDGRID_API_KEY;
-const fromEmail = env.FROM_EMAIL ?? 'noreply@3alarmlabs.com';
+const fromEmail = env.FROM_EMAIL ?? 'andrew@3alarmlabs.com';
 
 if (apiKey) {
 	sgMail.setApiKey(apiKey);
