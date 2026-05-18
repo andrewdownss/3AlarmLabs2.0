@@ -4,9 +4,23 @@
 	import { Button } from '$lib/components/ui/button';
 	import { PLANS } from '$lib/plans';
 	import { defaultOgImageUrl, toCanonicalUrl } from '$lib/seo';
+	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
 
+	const GOOGLE_ADS_PURCHASE_SEND_TO = 'AW-18018651902/JNPmCICBpq8cEP6d-49D';
+
 	let { data }: { data: PageData } = $props();
+
+	onMount(() => {
+		if (!data.isPostCheckout || !data.sessionId) return;
+		const dedupeKey = `gtag_purchase_conversion_${data.sessionId}`;
+		if (sessionStorage.getItem(dedupeKey)) return;
+		window.gtag?.('event', 'conversion', {
+			send_to: GOOGLE_ADS_PURCHASE_SEND_TO,
+			transaction_id: data.sessionId
+		});
+		sessionStorage.setItem(dedupeKey, '1');
+	});
 
 	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
 	const pageTitle = 'Thank you | 3AlarmLabs';

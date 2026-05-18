@@ -1,4 +1,8 @@
 declare global {
+	interface Window {
+		gtag?: (...args: unknown[]) => void;
+	}
+
 	namespace App {
 		interface Locals {
 			user: {
