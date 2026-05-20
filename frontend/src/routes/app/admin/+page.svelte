@@ -126,13 +126,13 @@
 				</p>
 				<Button class="mt-4" href={resolve('/app/command/library')}>Open library</Button>
 			{:else}
-				<form method="POST" action="?/setDemoScenario" class="grid gap-4 lg:grid-cols-[1fr_auto]">
+				<form method="POST" action="?/setDemoScenario" class="max-w-xl space-y-4">
 					<div>
 						<label for="demo-scenario" class="text-sm font-medium">Selected simulation</label>
 						<select
 							id="demo-scenario"
 							name="scenarioId"
-							class="mt-2 h-11 w-full rounded-md border bg-background px-3 text-sm"
+							class="mt-2 h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
 						>
 							{#each data.libraryScenarios as scenario (scenario.id)}
 								<option value={scenario.id} selected={scenario.id === data.demoScenario?.id}>
@@ -140,15 +140,15 @@
 								</option>
 							{/each}
 						</select>
-						<p class="mt-2 text-xs text-muted-foreground">
-							Current:
-							{data.demoScenario?.title ?? 'No demo simulation selected'}
-						</p>
 					</div>
-					<div class="flex items-end gap-2">
-						<Button type="submit" class="min-h-11">Save demo simulation</Button>
-						<Button variant="outline" class="min-h-11" href={resolve('/demo')}>View demo</Button>
+					<div class="flex flex-wrap gap-2">
+						<Button type="submit">Save demo simulation</Button>
+						<Button variant="outline" href={resolve('/demo')}>View demo</Button>
 					</div>
+					<p class="text-xs text-muted-foreground">
+						Current:
+						{data.demoScenario?.title ?? 'No demo simulation selected'}
+					</p>
 				</form>
 			{/if}
 		</CardContent>

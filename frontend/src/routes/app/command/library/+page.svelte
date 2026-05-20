@@ -187,27 +187,46 @@
 					<span class="text-xs text-muted-foreground">{formatDate(scenario.publishedAt)}</span>
 				</div>
 
-				<div class="mt-auto grid gap-2 pt-5 sm:grid-cols-2">
-					<Button
-						class="min-h-11"
-						disabled={starting !== null || scenario.status !== 'published'}
-						onclick={() => handleStartSession(scenario.id)}
-					>
-						{#if starting === scenario.id}
-							<Spinner class="mr-2 h-4 w-4" />
-						{/if}
-						Self Practice
-					</Button>
+				<div class="mt-auto flex flex-col gap-2 pt-5">
 					{#if data.user.isAdmin}
-						<Button variant="outline" href={`/app/command/scenarios/${scenario.id}`}>Edit</Button>
-						<button
-							type="button"
-							class="min-h-11 rounded-md border border-destructive/30 px-3 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50 sm:col-span-2"
+						<div class="grid grid-cols-2 gap-2">
+							<Button
+								class="w-full"
+								disabled={starting !== null || scenario.status !== 'published'}
+								onclick={() => handleStartSession(scenario.id)}
+							>
+								{#if starting === scenario.id}
+									<Spinner class="mr-2 h-4 w-4" />
+								{/if}
+								Self Practice
+							</Button>
+							<Button
+								variant="outline"
+								class="w-full"
+								href={`/app/command/scenarios/${scenario.id}`}
+							>
+								Edit
+							</Button>
+						</div>
+						<Button
+							variant="destructive"
+							class="w-full"
 							disabled={deletingId === scenario.id}
 							onclick={() => handleDeleteScenario(scenario.id)}
 						>
 							{deletingId === scenario.id ? 'Deleting...' : 'Delete'}
-						</button>
+						</Button>
+					{:else}
+						<Button
+							class="w-full"
+							disabled={starting !== null || scenario.status !== 'published'}
+							onclick={() => handleStartSession(scenario.id)}
+						>
+							{#if starting === scenario.id}
+								<Spinner class="mr-2 h-4 w-4" />
+							{/if}
+							Self Practice
+						</Button>
 					{/if}
 				</div>
 			</div>

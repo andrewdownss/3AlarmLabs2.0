@@ -2,12 +2,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import {
-		ORG_MEMBER_ROLE_LABELS,
-		ORG_MEMBER_ROLES,
-		orgMemberRoleBadgeVariant,
-		type OrgMemberRole
-	} from '$lib/org-roles';
+	import { ORG_MEMBER_ROLE_LABELS, ORG_MEMBER_ROLES, type OrgMemberRole } from '$lib/org-roles';
 	import { page } from '$app/state';
 	import type { PageData } from './$types';
 
@@ -261,7 +256,7 @@
 
 				<ul class="mt-4 divide-y rounded-lg border">
 					{#each data.members as m (m.id)}
-						<li class="flex flex-col gap-3 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+						<li class="flex items-center justify-between gap-4 px-4 py-3 text-sm">
 							<div class="min-w-0">
 								<p class="font-medium">{m.user.name}</p>
 								<p class="truncate text-xs text-muted-foreground">{m.user.email}</p>
@@ -269,7 +264,7 @@
 							<form
 								method="POST"
 								action="?/updateMemberRole"
-								class="flex shrink-0 items-center gap-2"
+								class="shrink-0"
 								onsubmit={(event) =>
 									handleRoleSubmit(
 										event,
@@ -282,7 +277,7 @@
 								<input type="hidden" name="memberId" value={m.id} />
 								<select
 									name="role"
-									class="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+									class="h-8 min-w-[8.5rem] rounded-lg border border-border bg-background px-2.5 text-sm font-medium shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
 									value={m.role}
 									onchange={(event) => event.currentTarget.form?.requestSubmit()}
 								>
@@ -296,9 +291,6 @@
 										</option>
 									{/each}
 								</select>
-								<Badge variant={orgMemberRoleBadgeVariant(m.role)}>
-									{ORG_MEMBER_ROLE_LABELS[m.role]}
-								</Badge>
 							</form>
 						</li>
 					{/each}
