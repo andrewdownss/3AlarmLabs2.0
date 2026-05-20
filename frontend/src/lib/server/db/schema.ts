@@ -133,7 +133,10 @@ export const organizationMembers = pgTable(
 		userId: text('user_id')
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
-		role: text('role').$type<'owner' | 'member'>().notNull().default('member'),
+		role: text('role')
+			.$type<'owner' | 'instructor' | 'member'>()
+			.notNull()
+			.default('member'),
 		joinedAt: timestamp('joined_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull()
 	},
 	(table) => [

@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { and, desc, eq, gt, count } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
+import { invalidateLayoutCache } from '$lib/server/cache';
 import { db } from '$lib/server/db';
 import {
 	organizationInvites,
@@ -11,6 +12,7 @@ import {
 import { sendInviteEmail } from '$lib/server/email';
 import { allocateUniqueOrganizationJoinCode } from '$lib/server/join-code';
 import { canInviteUser, getPlanConfig, normalizePlanId } from '$lib/plans';
+import { isOrgMemberRole, type OrgMemberRole } from '$lib/org-roles';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -20,7 +22,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	});
 
 	if (!ownedOrg) {
-		return { isOwner: false as const };
+		return { isOwner: false as const, currentUserId: locals.user.id };
 	}
 
 	if (ownedOrg.isPersonal) {
@@ -28,6 +30,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		return {
 			isOwner: true as const,
 			isPersonal: true as const,
+			currentUserId: locals.user.id,
 			organization: ownedOrg,
 			plan,
 			members: [],
@@ -72,6 +75,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		isOwner: true as const,
+		currentUserId: locals.user.id,
 		organization: ownedOrg,
 		plan,
 		members,
@@ -189,5 +193,103 @@ export const actions: Actions = {
 		}
 
 		return { success: true as const, inviteUrl };
+	},
+
+	updateMemberRole: async ({ locals, request }) => {
+		if (!locals.user) throw redirect(303, '/login');
+
+		const ownedOrg = await db.query.organizations.findFirst({
+			where: eq(organizations.ownerId, locals.user.id)
+		});
+		if (!ownedOrg) {
+			return fail(403, { error: 'Only organization owners can change member roles.' });
+		}
+		if (ownedOrg.isPersonal) {
+			return fail(403, { error: 'Personal accounts cannot manage member roles.' });
+		}
+
+		const form = await request.formData();
+		const memberId = String(form.get('memberId') ?? '').trim();
+		const roleRaw = String(form.get('role') ?? '').trim();
+
+		if (!memberId) {
+			return fail(400, { error: 'Member not found.' });
+		}
+		if (!isOrgMemberRole(roleRaw)) {
+			return fail(400, { error: 'Invalid role.' });
+		}
+		const role: OrgMemberRole = roleRaw;
+
+		const memberRow = await db.query.organizationMembers.findFirst({
+			where: and(
+				eq(organizationMembers.id, memberId),
+				eq(organizationMembers.organizationId, ownedOrg.id)
+			),
+			columns: { id: true, userId: true, role: true }
+		});
+
+		if (!memberRow) {
+			return fail(404, { error: 'Member not found in your organization.' });
+		}
+		if (memberRow.role === role) {
+			return { roleUpdated: true as const };
+		}
+
+		const isCanonicalOwner = memberRow.userId === ownedOrg.ownerId;
+
+		if (isCanonicalOwner && role !== 'owner') {
+			return fail(400, {
+				error: 'Transfer ownership to another member before changing your role.'
+			});
+		}
+
+		if (role === 'owner') {
+			if (memberRow.userId === ownedOrg.ownerId) {
+				return { roleUpdated: true as const };
+			}
+
+			const previousOwnerId = ownedOrg.ownerId;
+
+			await db.transaction(async (tx) => {
+				await tx
+					.update(organizations)
+					.set({ ownerId: memberRow.userId })
+					.where(eq(organizations.id, ownedOrg.id));
+
+				await tx
+					.update(organizationMembers)
+					.set({ role: 'owner' })
+					.where(eq(organizationMembers.id, memberRow.id));
+
+				const previousOwnerMember = await tx.query.organizationMembers.findFirst({
+					where: and(
+						eq(organizationMembers.organizationId, ownedOrg.id),
+						eq(organizationMembers.userId, previousOwnerId)
+					),
+					columns: { id: true }
+				});
+
+				if (previousOwnerMember) {
+					await tx
+						.update(organizationMembers)
+						.set({ role: 'instructor' })
+						.where(eq(organizationMembers.id, previousOwnerMember.id));
+				}
+			});
+
+			invalidateLayoutCache(previousOwnerId);
+			invalidateLayoutCache(memberRow.userId);
+
+			return { roleUpdated: true as const, ownershipTransferred: true as const };
+		}
+
+		await db
+			.update(organizationMembers)
+			.set({ role })
+			.where(eq(organizationMembers.id, memberRow.id));
+
+		invalidateLayoutCache(memberRow.userId);
+
+		return { roleUpdated: true as const };
 	}
 };

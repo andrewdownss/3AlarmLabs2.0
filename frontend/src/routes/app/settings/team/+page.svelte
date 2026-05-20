@@ -2,6 +2,12 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import {
+		ORG_MEMBER_ROLE_LABELS,
+		ORG_MEMBER_ROLES,
+		orgMemberRoleBadgeVariant,
+		type OrgMemberRole
+	} from '$lib/org-roles';
 	import { page } from '$app/state';
 	import type { PageData } from './$types';
 
@@ -11,7 +17,16 @@
 	let copyHint = $state('');
 
 	const form = $derived(
-		page.form as { error?: string; inviteUrl?: string; success?: boolean } | null | undefined
+		page.form as
+			| {
+					error?: string;
+					inviteUrl?: string;
+					success?: boolean;
+					roleUpdated?: boolean;
+					ownershipTransferred?: boolean;
+			  }
+			| null
+			| undefined
 	);
 
 	async function copyText(value: string) {
@@ -23,6 +38,38 @@
 			}, 2000);
 		} catch {
 			copyHint = 'Unable to copy — select and copy manually';
+		}
+	}
+
+	function handleRoleSubmit(
+		event: SubmitEvent,
+		memberName: string,
+		memberUserId: string,
+		currentRole: OrgMemberRole,
+		orgOwnerId: string
+	) {
+		const formEl = event.currentTarget as HTMLFormElement;
+		const select = formEl.querySelector('select[name="role"]') as HTMLSelectElement | null;
+		if (!select) return;
+
+		const newRole = select.value as OrgMemberRole;
+		const isCurrentOwner = memberUserId === orgOwnerId;
+
+		if (isCurrentOwner && newRole !== 'owner') {
+			event.preventDefault();
+			select.value = 'owner';
+			return;
+		}
+
+		if (newRole === 'owner' && !isCurrentOwner) {
+			if (
+				!confirm(
+					`Transfer ownership to ${memberName}? You will become an Instructor and lose billing and team admin access.`
+				)
+			) {
+				event.preventDefault();
+				select.value = currentRole;
+			}
 		}
 	}
 </script>
@@ -195,14 +242,64 @@
 
 			<section class="rounded-xl border bg-card p-6 shadow-sm">
 				<h3 class="text-sm font-semibold">Members</h3>
+				<p class="mt-1 text-xs text-muted-foreground">
+					Assign each person as Owner, Instructor, or Member. Transferring ownership gives billing
+					and team admin access to the new owner.
+				</p>
+
+				{#if form?.roleUpdated}
+					<div
+						class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
+					>
+						{#if form.ownershipTransferred}
+							Ownership transferred successfully.
+						{:else}
+							Member role updated.
+						{/if}
+					</div>
+				{/if}
+
 				<ul class="mt-4 divide-y rounded-lg border">
 					{#each data.members as m (m.id)}
-						<li class="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+						<li class="flex flex-col gap-3 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
 							<div class="min-w-0">
 								<p class="font-medium">{m.user.name}</p>
 								<p class="truncate text-xs text-muted-foreground">{m.user.email}</p>
 							</div>
-							<Badge variant={m.role === 'owner' ? 'default' : 'outline'}>{m.role}</Badge>
+							<form
+								method="POST"
+								action="?/updateMemberRole"
+								class="flex shrink-0 items-center gap-2"
+								onsubmit={(event) =>
+									handleRoleSubmit(
+										event,
+										m.user.name,
+										m.user.id,
+										m.role,
+										data.organization.ownerId
+									)}
+							>
+								<input type="hidden" name="memberId" value={m.id} />
+								<select
+									name="role"
+									class="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+									value={m.role}
+									onchange={(event) => event.currentTarget.form?.requestSubmit()}
+								>
+									{#each ORG_MEMBER_ROLES as role (role)}
+										<option
+											value={role}
+											disabled={m.user.id === data.organization.ownerId &&
+												role !== 'owner'}
+										>
+											{ORG_MEMBER_ROLE_LABELS[role]}
+										</option>
+									{/each}
+								</select>
+								<Badge variant={orgMemberRoleBadgeVariant(m.role)}>
+									{ORG_MEMBER_ROLE_LABELS[m.role]}
+								</Badge>
+							</form>
 						</li>
 					{/each}
 				</ul>
