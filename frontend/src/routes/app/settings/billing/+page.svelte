@@ -132,7 +132,7 @@
 		</p>
 	{/if}
 
-	{#if !data.isOrgOwner}
+	{#if !data.isActiveOrgOwner}
 		<div class="rounded-xl border bg-card p-6 shadow-sm">
 			<p class="text-sm text-muted-foreground">
 				Only the organization owner can manage billing. Ask your lead to upgrade, or contact

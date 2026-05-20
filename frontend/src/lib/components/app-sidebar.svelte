@@ -36,8 +36,10 @@
 		if (data.user?.isAdmin) {
 			items.push({ label: 'Admin', href: '/app/admin', icon: LayoutListIcon });
 		}
-		if (data.isOrgOwner) {
+		if (data.isActiveOrgOwner) {
 			items.push({ label: 'Billing', href: '/app/settings/billing', icon: CreditCardIcon });
+		}
+		if (data.isOrgOwner) {
 			items.push({ label: 'Team', href: '/app/settings/team', icon: UsersIcon });
 		}
 		return items;
