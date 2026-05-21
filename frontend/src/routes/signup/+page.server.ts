@@ -56,6 +56,8 @@ export const actions: Actions = {
 		});
 		await posthog.flush();
 
-		throw redirect(303, next);
+		const conversionId = crypto.randomUUID();
+		const thankYouUrl = `/signup/thank-you?next=${encodeURIComponent(next)}&cid=${encodeURIComponent(conversionId)}`;
+		throw redirect(303, thankYouUrl);
 	}
 };
