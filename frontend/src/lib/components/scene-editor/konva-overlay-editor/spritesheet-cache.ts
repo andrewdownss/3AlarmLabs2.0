@@ -1,4 +1,4 @@
-import { getAnimationPack } from '$lib/animations/registry';
+import { getAnimationPack, animationAssetUrl } from '$lib/animations/registry';
 
 const spritesheetImages = new Map<string, HTMLImageElement>();
 const spritesheetLoads = new Map<string, Promise<HTMLImageElement | null>>();
@@ -34,7 +34,7 @@ export async function preloadSpritesheetPack(
 			resolve(image);
 		};
 		image.onerror = () => resolve(null);
-		image.src = pack.spritesheetPath;
+		image.src = animationAssetUrl(pack.spritesheetPath);
 	});
 
 	spritesheetLoads.set(packId, nextLoad);

@@ -3,6 +3,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import type { AnimationPack } from '$lib/animations/types';
+	import { animationAssetUrl } from '$lib/animations/registry';
 	import type { OverlayKind } from './overlay-types';
 	import { preloadSpritesheetPack } from './spritesheet-cache';
 
@@ -68,7 +69,7 @@
 							onclick={() => handleAdd(pack.id, pack.category)}
 						>
 							<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-red-500/10">
-								<img src={pack.previewPath} alt={pack.name} class="h-9 w-9 object-contain" />
+								<img src={animationAssetUrl(pack.previewPath)} alt={pack.name} class="h-9 w-9 object-contain" />
 							</div>
 							<span class="text-xs font-medium">{pack.name}</span>
 						</button>
@@ -96,7 +97,7 @@
 							onclick={() => handleAdd(pack.id, pack.category)}
 						>
 							<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-400/10">
-								<img src={pack.previewPath} alt={pack.name} class="h-9 w-9 object-contain" />
+								<img src={animationAssetUrl(pack.previewPath)} alt={pack.name} class="h-9 w-9 object-contain" />
 							</div>
 							<span class="text-xs font-medium">{pack.name}</span>
 						</button>
@@ -126,7 +127,7 @@
 							<div
 								class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-amber-500/10"
 							>
-								<img src={pack.previewPath} alt={pack.name} class="h-11 w-11 object-contain" />
+								<img src={animationAssetUrl(pack.previewPath)} alt={pack.name} class="h-11 w-11 object-contain" />
 							</div>
 							<span class="text-xs font-medium">{pack.name}</span>
 						</button>

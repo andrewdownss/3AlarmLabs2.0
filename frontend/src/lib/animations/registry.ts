@@ -154,8 +154,8 @@ export const ANIMATION_PACKS: AnimationPack[] = [
 		columns: 1,
 		rows: 1,
 		fps: 1,
-		spritesheetPath: '/animations/victims/female-full.png',
-		previewPath: '/animations/victims/female-full.png'
+		spritesheetPath: '/animations/victims/female-full/spritesheet.png',
+		previewPath: '/animations/victims/female-full/preview.png'
 	},
 	{
 		id: 'victim-female-half',
@@ -167,8 +167,8 @@ export const ANIMATION_PACKS: AnimationPack[] = [
 		columns: 1,
 		rows: 1,
 		fps: 1,
-		spritesheetPath: '/animations/victims/female-half.png',
-		previewPath: '/animations/victims/female-half.png'
+		spritesheetPath: '/animations/victims/female-half/spritesheet.png',
+		previewPath: '/animations/victims/female-half/preview.png'
 	},
 	{
 		id: 'victim-male-full',
@@ -180,8 +180,8 @@ export const ANIMATION_PACKS: AnimationPack[] = [
 		columns: 1,
 		rows: 1,
 		fps: 1,
-		spritesheetPath: '/animations/victims/male-full.png',
-		previewPath: '/animations/victims/male-full.png'
+		spritesheetPath: '/animations/victims/male-full/spritesheet.png',
+		previewPath: '/animations/victims/male-full/preview.png'
 	},
 	{
 		id: 'victim-male-half',
@@ -193,10 +193,19 @@ export const ANIMATION_PACKS: AnimationPack[] = [
 		columns: 1,
 		rows: 1,
 		fps: 1,
-		spritesheetPath: '/animations/victims/male-half.png',
-		previewPath: '/animations/victims/male-half.png'
+		spritesheetPath: '/animations/victims/male-half/spritesheet.png',
+		previewPath: '/animations/victims/male-half/preview.png'
 	}
 ];
+
+/** Bump when static animation assets change (cache-bust CDN stale 404s). */
+export const ANIMATION_ASSET_VERSION = '2';
+
+export function animationAssetUrl(path: string): string {
+	if (!path) return path;
+	const separator = path.includes('?') ? '&' : '?';
+	return `${path}${separator}v=${ANIMATION_ASSET_VERSION}`;
+}
 
 const animationPackById = new Map(ANIMATION_PACKS.map((pack) => [pack.id, pack] as const));
 
