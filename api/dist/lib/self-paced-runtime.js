@@ -7,7 +7,7 @@
 import { and, asc, eq, isNull, lte } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { trainerCommandBoardEntries, trainerScenarios, trainerScheduledEvents, trainerSessionEvents, trainerSessions, } from "../db/schema/trainer.js";
-import { matchesAssignment, parseSelfPacedConfig, simulationElapsedMs, } from "./self-paced.js";
+import { formatDispatchUpdateWithUnit, matchesAssignment, parseSelfPacedConfig, simulationElapsedMs, } from "./self-paced.js";
 import { applyStateDispatch } from "./state-dispatch.js";
 async function loadSession(sessionId) {
     const [row] = await db
@@ -162,7 +162,15 @@ async function fireDueScheduledEvents(io, session, now) {
                 ? payload.ruleId
                 : row.ruleId ?? undefined;
             if (dispatch && typeof dispatch === "object") {
-                await applyStateDispatch(io, session.id, dispatch, {
+                const raw = dispatch;
+                const triggerUnit = typeof payload?.trigger?.unitName === "string"
+                    ? payload.trigger.unitName
+                    : undefined;
+                const completionDispatch = { ...raw };
+                if (raw.update?.trim()) {
+                    completionDispatch.update = formatDispatchUpdateWithUnit(triggerUnit, raw.update);
+                }
+                await applyStateDispatch(io, session.id, completionDispatch, {
                     source: "completion",
                     ruleId,
                 });

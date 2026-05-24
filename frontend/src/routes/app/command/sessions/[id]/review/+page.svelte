@@ -299,7 +299,7 @@
 										: ''}">{event.eventType.replace(/_/g, ' ')}</Badge
 								>
 							</div>
-							{#if event.eventType === 'state_dispatched'}
+							{#if event.eventType === 'state_dispatched' || event.eventType === 'timeline_event_dispatched'}
 								<div class="mt-2 text-base leading-relaxed">
 									{#if event.payloadJson?.stage}Stage changed to {stageLabels[
 											String(event.payloadJson.stage)

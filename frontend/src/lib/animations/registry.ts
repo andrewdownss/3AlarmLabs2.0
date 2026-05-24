@@ -143,6 +143,58 @@ export const ANIMATION_PACKS: AnimationPack[] = [
 		fps: 24,
 		spritesheetPath: '/animations/smoke/smoke6/spritesheet.png',
 		previewPath: '/animations/smoke/smoke6/preview.png'
+	},
+	{
+		id: 'victim-female-full',
+		name: 'Female full',
+		category: 'victim',
+		frameCount: 1,
+		frameWidth: 768,
+		frameHeight: 1024,
+		columns: 1,
+		rows: 1,
+		fps: 1,
+		spritesheetPath: '/animations/victims/female-full.png',
+		previewPath: '/animations/victims/female-full.png'
+	},
+	{
+		id: 'victim-female-half',
+		name: 'Female half',
+		category: 'victim',
+		frameCount: 1,
+		frameWidth: 819,
+		frameHeight: 1024,
+		columns: 1,
+		rows: 1,
+		fps: 1,
+		spritesheetPath: '/animations/victims/female-half.png',
+		previewPath: '/animations/victims/female-half.png'
+	},
+	{
+		id: 'victim-male-full',
+		name: 'Male full',
+		category: 'victim',
+		frameCount: 1,
+		frameWidth: 682,
+		frameHeight: 1024,
+		columns: 1,
+		rows: 1,
+		fps: 1,
+		spritesheetPath: '/animations/victims/male-full.png',
+		previewPath: '/animations/victims/male-full.png'
+	},
+	{
+		id: 'victim-male-half',
+		name: 'Male half',
+		category: 'victim',
+		frameCount: 1,
+		frameWidth: 1024,
+		frameHeight: 819,
+		columns: 1,
+		rows: 1,
+		fps: 1,
+		spritesheetPath: '/animations/victims/male-half.png',
+		previewPath: '/animations/victims/male-half.png'
 	}
 ];
 

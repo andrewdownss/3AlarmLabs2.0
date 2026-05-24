@@ -509,8 +509,7 @@
 				</div>
 				<p class="mt-1 text-xs text-muted-foreground">
 					Trigger a delayed update after a student assigns any selected unit to any selected task.
-					Example: Truck 1 or Truck 2 assigned to primary search or cut the roof → wait 3
-					minutes → send an update.
+					The triggering unit name is added automatically (e.g. engine 2: grabbed a supply line).
 				</p>
 			</div>
 			<Button type="button" size="sm" variant="outline" onclick={addActionUpdate}>
@@ -643,7 +642,7 @@
 							>
 							<Input
 								id={`action-update-${rule.id}`}
-								placeholder="e.g., Truck 1 reports roof opened up"
+								placeholder="e.g., grabbed a supply line"
 								value={rule.dispatch.update ?? ''}
 								oninput={(event) =>
 									updateActionDispatch(rule.id, {

@@ -13,6 +13,7 @@
 
 	const firePacks = ANIMATION_PACKS.filter((pack) => pack.category === 'fire');
 	const smokePacks = ANIMATION_PACKS.filter((pack) => pack.category === 'smoke');
+	const victimPacks = ANIMATION_PACKS.filter((pack) => pack.category === 'victim');
 
 	const emptyDraftValues: OverlayDraftValues = {
 		x: '',
@@ -52,10 +53,9 @@
 
 	onMount(() => {
 		if (typeof window === 'undefined') return;
-		isTouchDevice =
-			window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+		isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 
-		const starterPackIds = [firePacks[0]?.id, smokePacks[0]?.id].filter(
+		const starterPackIds = [firePacks[0]?.id, smokePacks[0]?.id, victimPacks[0]?.id].filter(
 			(packId): packId is string => Boolean(packId)
 		);
 
@@ -205,6 +205,7 @@
 				<OverlayAssetPanel
 					{firePacks}
 					{smokePacks}
+					{victimPacks}
 					isImageReady={Boolean(imageSize)}
 					selectedPackId={selectedOverlay?.packId ?? null}
 					on:addOverlay={(event) => handleAddFromToolbox(event.detail.packId, event.detail.kind)}
@@ -221,7 +222,9 @@
 			<Card class="overflow-hidden">
 				<CardContent class="p-3 sm:p-4">
 					<div class="relative overflow-hidden rounded-xl border bg-muted/30">
-						<div class="relative h-[52dvh] min-h-[320px] w-full sm:h-[60dvh] xl:h-[min(72vh,820px)]">
+						<div
+							class="relative h-[52dvh] min-h-[320px] w-full sm:h-[60dvh] xl:h-[min(72vh,820px)]"
+						>
 							<OverlayCanvas
 								{baseImageUrl}
 								{overlays}
@@ -235,9 +238,9 @@
 								class="pointer-events-none absolute bottom-3 left-3 rounded-lg border bg-background/85 px-3 py-2 text-xs text-muted-foreground backdrop-blur"
 							>
 								{#if isTouchDevice}
-									Tap to select. Drag to move. Use handles to resize or rotate.
+									Tap to select. Drag to move. Pinch to zoom. Drag the background to pan when zoomed.
 								{:else}
-									Click to select. Drag to move. Use handles to resize or rotate.
+									Click to select. Drag to move. Scroll to zoom. Drag the background to pan when zoomed.
 								{/if}
 							</div>
 						</div>
@@ -246,7 +249,9 @@
 			</Card>
 
 			<div class="mt-4 space-y-4 xl:hidden">
-				<div class="sticky top-2 z-10 rounded-xl border bg-background/95 p-1 shadow-sm backdrop-blur">
+				<div
+					class="sticky top-2 z-10 rounded-xl border bg-background/95 p-1 shadow-sm backdrop-blur"
+				>
 					<div class="grid grid-cols-3 gap-1">
 						{#each ['assets', 'layers', 'properties'] as tab}
 							<button
@@ -268,6 +273,7 @@
 					<OverlayAssetPanel
 						{firePacks}
 						{smokePacks}
+						{victimPacks}
 						isImageReady={Boolean(imageSize)}
 						selectedPackId={selectedOverlay?.packId ?? null}
 						on:addOverlay={(event) => handleAddFromToolbox(event.detail.packId, event.detail.kind)}

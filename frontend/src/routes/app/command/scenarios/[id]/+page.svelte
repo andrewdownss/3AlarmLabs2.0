@@ -2084,7 +2084,7 @@
 																</label>
 																<Input
 																	id={`ac-update-${rule.id}`}
-																	placeholder="e.g., Primary all-clear from Truck 1"
+																	placeholder="e.g., grabbed a supply line"
 																	class="border-blue-200/80 dark:border-blue-900/50"
 																	bind:value={rule.dispatch.update}
 																/>

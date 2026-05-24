@@ -3,7 +3,7 @@
 export interface AnimationPack {
 	id: string;
 	name: string;
-	category: 'fire' | 'smoke';
+	category: 'fire' | 'smoke' | 'victim';
 	frameCount: number;
 	frameWidth: number;
 	frameHeight: number;

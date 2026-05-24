@@ -24,6 +24,12 @@ function clampNumber(value: number, min: number, max: number) {
 	return value;
 }
 
+function getOverlayDisplayName(kind: OverlayKind) {
+	if (kind === 'fire') return 'Fire';
+	if (kind === 'smoke') return 'Smoke';
+	return 'Victim';
+}
+
 export function getDefaultPackId(kind: OverlayKind): string {
 	const pack = ANIMATION_PACKS.find((p) => p.category === kind);
 	return pack?.id ?? ANIMATION_PACKS[0]?.id ?? '';
@@ -35,14 +41,24 @@ export function createAnimationOverlay(
 	packId?: string
 ): AnimationOverlay {
 	const resolvedPackId = packId ?? getDefaultPackId(kind);
-	const defaultWidth = clampNumber(Math.round(imageSize.width * 0.22), 80, imageSize.width);
-	const defaultHeight = clampNumber(Math.round(imageSize.height * 0.22), 80, imageSize.height);
+	const pack = ANIMATION_PACKS.find((p) => p.id === resolvedPackId);
+	const aspectRatio = pack ? pack.frameWidth / pack.frameHeight : 1;
+	const defaultHeight = clampNumber(
+		Math.round(imageSize.height * (kind === 'victim' ? 0.36 : 0.22)),
+		80,
+		imageSize.height
+	);
+	const defaultWidth = clampNumber(
+		Math.round(defaultHeight * (kind === 'victim' ? aspectRatio : 1)),
+		80,
+		imageSize.width
+	);
 
 	return {
 		id: crypto.randomUUID(),
 		packId: resolvedPackId,
 		kind,
-		name: kind === 'fire' ? 'Fire' : 'Smoke',
+		name: pack?.name ?? getOverlayDisplayName(kind),
 		x: Math.round((imageSize.width - defaultWidth) / 2),
 		y: Math.round((imageSize.height - defaultHeight) / 2),
 		width: defaultWidth,
@@ -79,11 +95,12 @@ export function normalizeAnimationOverlay(
 	overlay: PersistedAnimationOverlay,
 	imageSize?: ImageSizePx
 ): AnimationOverlay {
+	const pack = ANIMATION_PACKS.find((p) => p.id === overlay.packId);
 	const normalizedOverlay: AnimationOverlay = {
 		id: overlay.id,
 		packId: overlay.packId,
 		kind: overlay.kind,
-		name: overlay.name,
+		name: overlay.name ?? pack?.name,
 		x: overlay.x,
 		y: overlay.y,
 		width: overlay.width,
@@ -97,6 +114,8 @@ export function normalizeAnimationOverlay(
 	return imageSize ? clampOverlayToImage(normalizedOverlay, imageSize) : normalizedOverlay;
 }
 
-export function normalizeAnimationOverlays(overlays: PersistedAnimationOverlay[] | null | undefined) {
+export function normalizeAnimationOverlays(
+	overlays: PersistedAnimationOverlay[] | null | undefined
+) {
 	return (overlays ?? []).map((overlay) => normalizeAnimationOverlay(overlay));
 }

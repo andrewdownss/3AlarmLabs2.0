@@ -32,7 +32,7 @@
 
 		{#if overlays.length === 0}
 			<div class="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-				No overlays yet. Add a fire or smoke asset to begin.
+				No overlays yet. Add a fire, smoke, or victim asset to begin.
 			</div>
 		{:else}
 			<div class="space-y-2">

@@ -220,3 +220,18 @@ export function matchesAssignment(
 	}
 	return true;
 }
+
+/** Prefix an incident update with the triggering unit, e.g. "engine 2: grabbed a supply line". */
+export function formatDispatchUpdateWithUnit(
+	unitName: string | undefined,
+	update: string
+): string {
+	const trimmed = update.trim();
+	if (!trimmed) return trimmed;
+	const unit = unitName?.trim();
+	if (!unit) return trimmed;
+	const prefix = `${unit.toLowerCase()}:`;
+	if (trimmed.toLowerCase().startsWith(prefix)) return trimmed;
+	const message = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+	return `${unit.toLowerCase()}: ${message}`;
+}

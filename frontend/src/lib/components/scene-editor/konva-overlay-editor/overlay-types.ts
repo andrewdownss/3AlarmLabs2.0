@@ -3,7 +3,7 @@ export interface ImageSizePx {
 	height: number;
 }
 
-export type OverlayKind = 'fire' | 'smoke';
+export type OverlayKind = 'fire' | 'smoke' | 'victim';
 
 export interface AnimationOverlay {
 	id: string;

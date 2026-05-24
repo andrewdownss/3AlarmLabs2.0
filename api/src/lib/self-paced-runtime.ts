@@ -16,12 +16,14 @@ import {
   trainerSessions,
 } from "../db/schema/trainer.js";
 import {
+  formatDispatchUpdateWithUnit,
   matchesAssignment,
   parseSelfPacedConfig,
   simulationElapsedMs,
   type AssignmentCompletionRule,
   type ExpectedAction,
   type SelfPacedConfig,
+  type SelfPacedDispatchPayload,
   type SimulationOutcome,
   type SimulationTimingFields,
 } from "./self-paced.js";
@@ -234,7 +236,11 @@ async function fireDueScheduledEvents(
 
     if (row.kind === "assignment_completion") {
       const payload = row.payloadJson as
-        | { dispatch?: unknown; ruleId?: unknown }
+        | {
+            dispatch?: unknown;
+            ruleId?: unknown;
+            trigger?: { unitName?: unknown };
+          }
         | null;
       const dispatch = payload?.dispatch;
       const ruleId =
@@ -242,15 +248,22 @@ async function fireDueScheduledEvents(
           ? payload.ruleId
           : row.ruleId ?? undefined;
       if (dispatch && typeof dispatch === "object") {
-        await applyStateDispatch(
-          io,
-          session.id,
-          dispatch as Record<string, never>,
-          {
-            source: "completion",
-            ruleId,
-          },
-        );
+        const raw = dispatch as SelfPacedDispatchPayload;
+        const triggerUnit =
+          typeof payload?.trigger?.unitName === "string"
+            ? payload.trigger.unitName
+            : undefined;
+        const completionDispatch: SelfPacedDispatchPayload = { ...raw };
+        if (raw.update?.trim()) {
+          completionDispatch.update = formatDispatchUpdateWithUnit(
+            triggerUnit,
+            raw.update,
+          );
+        }
+        await applyStateDispatch(io, session.id, completionDispatch, {
+          source: "completion",
+          ruleId,
+        });
       }
     } else if (row.kind === "force_end") {
       await endSession(io, session.id, {

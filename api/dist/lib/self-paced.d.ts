@@ -631,4 +631,6 @@ export declare function matchesAssignment(rule: AssignmentMatch, candidate: {
     unitName?: string | null;
     assignment?: string | null;
 }): boolean;
+/** Prefix an incident update with the triggering unit, e.g. "engine 2: grabbed a supply line". */
+export declare function formatDispatchUpdateWithUnit(unitName: string | undefined, update: string): string;
 //# sourceMappingURL=self-paced.d.ts.map
