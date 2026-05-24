@@ -206,7 +206,7 @@ export const scenes = pgTable(
 				Array<{
 					id: string;
 					packId: string;
-					kind: 'fire' | 'smoke';
+					kind: 'fire' | 'smoke' | 'victim';
 					x: number;
 					y: number;
 					width: number;
