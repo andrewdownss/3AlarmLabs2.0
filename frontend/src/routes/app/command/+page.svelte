@@ -178,11 +178,10 @@
 	{/if}
 
 	<div class="mt-8 space-y-4">
-		{#if data.libraryAccess.canView}
-			<a
-				href={resolve('/app/command/library')}
-				class="group block overflow-hidden rounded-xl border bg-card shadow-sm transition hover:border-primary/50 hover:shadow-md"
-			>
+		<a
+			href={resolve('/app/command/library')}
+			class="group block overflow-hidden rounded-xl border bg-card shadow-sm transition hover:border-primary/50 hover:shadow-md"
+		>
 				<div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
 					<div class="flex min-w-0 items-start gap-4">
 						<div
@@ -216,9 +215,8 @@
 					<div class="shrink-0 text-sm font-medium text-primary group-hover:underline">
 						View library →
 					</div>
-				</div>
-			</a>
-		{/if}
+			</div>
+		</a>
 
 		{#if data.scenarios.length === 0}
 			<div class="rounded-xl border border-dashed border-border p-12 text-center">

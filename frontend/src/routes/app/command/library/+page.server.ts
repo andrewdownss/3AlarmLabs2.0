@@ -5,8 +5,7 @@ import { db } from '$lib/server/db';
 import { trainerScenarios } from '$lib/server/db/schema';
 import {
 	canEditLibrary,
-	canManageLibraryCatalog,
-	canViewLibrary
+	canManageLibraryCatalog
 } from '$lib/server/library-access';
 
 type LibraryStatus = 'published' | 'scheduled' | 'draft';
@@ -16,11 +15,8 @@ function libraryStatus(publishedAt: Date | null, now: Date): LibraryStatus {
 	return publishedAt <= now ? 'published' : 'scheduled';
 }
 
-export const load: PageServerLoad = async ({ locals, parent }) => {
+export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
-
-	const { planConfig } = await parent();
-	if (!canViewLibrary(locals.user, planConfig)) throw redirect(303, '/app/settings/billing');
 
 	const now = new Date();
 	const canManage = canManageLibraryCatalog(locals.user);

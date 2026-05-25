@@ -16,7 +16,7 @@ import {
 	getPlanConfig,
 	normalizePlanId
 } from '$lib/plans';
-import { canEditLibrary, canViewLibrary } from '$lib/server/library-access';
+import { canEditLibrary } from '$lib/server/library-access';
 import { cloneSelfPacedConfig, duplicateScenarioTitle } from '$lib/server/scenario-clone';
 
 export const load: PageServerLoad = async ({ locals, depends, parent }) => {
@@ -57,12 +57,10 @@ export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 
 	const now = new Date();
 	const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-	const libraryRows = canViewLibrary(locals.user, planConfig)
-		? await db.query.trainerScenarios.findMany({
-				where: and(eq(trainerScenarios.isLibrary, true), lte(trainerScenarios.publishedAt, now)),
-				columns: { id: true, publishedAt: true }
-			})
-		: [];
+	const libraryRows = await db.query.trainerScenarios.findMany({
+			where: and(eq(trainerScenarios.isLibrary, true), lte(trainerScenarios.publishedAt, now)),
+			columns: { id: true, publishedAt: true }
+		});
 	const publishedDates = libraryRows
 		.map((row) => row.publishedAt)
 		.filter((date): date is Date => Boolean(date));
@@ -234,18 +232,6 @@ export const actions: Actions = {
 			columns: { id: true, isLibrary: true }
 		});
 		if (!scenario) return fail(404, { error: 'Scenario not found.' });
-		if (scenario.isLibrary) {
-			const orgRow = userOrganizationId
-				? await db.query.organizations.findFirst({
-						where: eq(organizations.id, userOrganizationId),
-						columns: { planId: true }
-					})
-				: null;
-			const planConfig = getPlanConfig(normalizePlanId(orgRow?.planId));
-			if (!canViewLibrary(locals.user, planConfig)) {
-				return fail(403, { error: 'Library scenarios require library access.' });
-			}
-		}
 		if (scenario.isLibrary && mode !== 'self_practice') {
 			return fail(403, { error: 'Library scenarios are available for self practice only.' });
 		}

@@ -93,8 +93,6 @@
 								{/if}
 								{#if u.libraryEditGranted}
 									<Badge variant="secondary">library editor</Badge>
-								{:else if u.libraryAccessGranted}
-									<Badge variant="outline">library access</Badge>
 								{/if}
 								{#if membership?.role}
 									<Badge variant="outline">{membership.role}</Badge>
@@ -127,15 +125,6 @@
 							{:else}
 								<form method="POST" action="?/updateLibraryAccess" class="space-y-1.5">
 									<input type="hidden" name="userId" value={u.id} />
-									<label class="flex items-center gap-1.5 text-xs">
-										<input
-											type="checkbox"
-											name="libraryAccessGranted"
-											checked={u.libraryAccessGranted || u.libraryEditGranted}
-											disabled={u.libraryEditGranted}
-										/>
-										<span class="truncate">View library</span>
-									</label>
 									<label class="flex items-center gap-1.5 text-xs">
 										<input
 											type="checkbox"

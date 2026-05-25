@@ -51,7 +51,6 @@ export const actions: Actions = {
 		const userId = String(form.get('userId') ?? '').trim();
 		if (!userId) return fail(400, { error: 'userId required' });
 
-		const libraryAccessGranted = form.get('libraryAccessGranted') === 'on';
 		const libraryEditGranted = form.get('libraryEditGranted') === 'on';
 
 		const userRow = await db.query.user.findFirst({
@@ -63,7 +62,7 @@ export const actions: Actions = {
 		await db
 			.update(userTable)
 			.set({
-				libraryAccessGranted: libraryAccessGranted || libraryEditGranted,
+				libraryAccessGranted: false,
 				libraryEditGranted
 			})
 			.where(eq(userTable.id, userId));
