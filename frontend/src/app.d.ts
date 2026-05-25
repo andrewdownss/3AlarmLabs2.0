@@ -12,6 +12,8 @@ declare global {
 				emailVerified: boolean;
 				image: string | null;
 				isAdmin: boolean;
+				libraryAccessGranted: boolean;
+				libraryEditGranted: boolean;
 				createdAt: Date;
 				updatedAt: Date;
 			} | null;

@@ -3,6 +3,7 @@ import { eq, count } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { organizationMembers, organizations, scenes } from '$lib/server/db/schema';
 import { getPlanConfig, normalizePlanId } from '$lib/plans';
+import { canEditLibrary, canViewLibrary } from '$lib/server/library-access';
 import { get, set } from '$lib/server/cache';
 import type { LayoutServerLoad } from './$types';
 
@@ -95,6 +96,10 @@ async function loadLayoutData(
 		session,
 		organization: org,
 		planConfig,
+		libraryAccess: {
+			canView: canViewLibrary(user, planConfig),
+			canEdit: canEditLibrary(user)
+		},
 		sceneCount,
 		memberCount,
 		isOrgOwner: canManageTeam,

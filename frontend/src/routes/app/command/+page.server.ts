@@ -16,6 +16,7 @@ import {
 	getPlanConfig,
 	normalizePlanId
 } from '$lib/plans';
+import { canEditLibrary, canViewLibrary } from '$lib/server/library-access';
 import { cloneSelfPacedConfig, duplicateScenarioTitle } from '$lib/server/scenario-clone';
 
 export const load: PageServerLoad = async ({ locals, depends, parent }) => {
@@ -56,7 +57,7 @@ export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 
 	const now = new Date();
 	const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-	const libraryRows = planConfig.canAccessLibrary
+	const libraryRows = canViewLibrary(locals.user, planConfig)
 		? await db.query.trainerScenarios.findMany({
 				where: and(eq(trainerScenarios.isLibrary, true), lte(trainerScenarios.publishedAt, now)),
 				columns: { id: true, publishedAt: true }
@@ -111,8 +112,8 @@ export const actions: Actions = {
 			columns: { id: true, isLibrary: true }
 		});
 		if (!scenario) return fail(404, { error: 'Scenario not found.' });
-		if (scenario.isLibrary && !locals.user.isAdmin) {
-			return fail(403, { error: 'Library scenarios can only be managed by admins.' });
+		if (scenario.isLibrary && !canEditLibrary(locals.user)) {
+			return fail(403, { error: 'Library scenarios can only be managed by admins or library editors.' });
 		}
 
 		await db.delete(trainerScenarios).where(eq(trainerScenarios.id, scenarioId));
@@ -142,8 +143,8 @@ export const actions: Actions = {
 			)
 		});
 		if (!source) return fail(404, { error: 'Scenario not found.' });
-		if (source.isLibrary && !locals.user.isAdmin) {
-			return fail(403, { error: 'Library scenarios can only be duplicated by admins.' });
+		if (source.isLibrary && !canEditLibrary(locals.user)) {
+			return fail(403, { error: 'Library scenarios can only be duplicated by admins or library editors.' });
 		}
 
 		const orgRow = organizationId
@@ -233,6 +234,18 @@ export const actions: Actions = {
 			columns: { id: true, isLibrary: true }
 		});
 		if (!scenario) return fail(404, { error: 'Scenario not found.' });
+		if (scenario.isLibrary) {
+			const orgRow = userOrganizationId
+				? await db.query.organizations.findFirst({
+						where: eq(organizations.id, userOrganizationId),
+						columns: { planId: true }
+					})
+				: null;
+			const planConfig = getPlanConfig(normalizePlanId(orgRow?.planId));
+			if (!canViewLibrary(locals.user, planConfig)) {
+				return fail(403, { error: 'Library scenarios require library access.' });
+			}
+		}
 		if (scenario.isLibrary && mode !== 'self_practice') {
 			return fail(403, { error: 'Library scenarios are available for self practice only.' });
 		}

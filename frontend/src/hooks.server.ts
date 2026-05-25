@@ -113,6 +113,8 @@ async function fetchUserRow(userId: string) {
 			emailVerified: true,
 			image: true,
 			isAdmin: true,
+			libraryAccessGranted: true,
+			libraryEditGranted: true,
 			createdAt: true,
 			updatedAt: true
 		}

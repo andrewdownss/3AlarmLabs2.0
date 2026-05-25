@@ -3,6 +3,11 @@ import type { Actions, PageServerLoad } from './$types';
 import { and, desc, eq, lte } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { trainerScenarios } from '$lib/server/db/schema';
+import {
+	canEditLibrary,
+	canManageLibraryCatalog,
+	canViewLibrary
+} from '$lib/server/library-access';
 
 type LibraryStatus = 'published' | 'scheduled' | 'draft';
 
@@ -15,11 +20,12 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 	if (!locals.user) throw redirect(303, '/login');
 
 	const { planConfig } = await parent();
-	if (!planConfig.canAccessLibrary) throw redirect(303, '/app/settings/billing');
+	if (!canViewLibrary(locals.user, planConfig)) throw redirect(303, '/app/settings/billing');
 
 	const now = new Date();
+	const canManage = canManageLibraryCatalog(locals.user);
 	const scenarios = await db.query.trainerScenarios.findMany({
-		where: locals.user.isAdmin
+		where: canManage
 			? eq(trainerScenarios.isLibrary, true)
 			: and(eq(trainerScenarios.isLibrary, true), lte(trainerScenarios.publishedAt, now)),
 		orderBy: [desc(trainerScenarios.publishedAt), desc(trainerScenarios.updatedAt)],
@@ -40,6 +46,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 	const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 	return {
 		user: locals.user,
+		canManageLibrary: canManage,
 		scenarios: scenarios.map((scenario) => ({
 			...scenario,
 			status: libraryStatus(scenario.publishedAt, now),
@@ -51,8 +58,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 export const actions: Actions = {
 	createLibraryScenario: async ({ locals }) => {
 		if (!locals.user) throw redirect(303, '/login');
-		if (!locals.user.isAdmin)
-			return fail(403, { error: 'Only admins can create library scenarios.' });
+		if (!canEditLibrary(locals.user))
+			return fail(403, { error: 'You do not have permission to create library scenarios.' });
 
 		const id = crypto.randomUUID();
 		await db.insert(trainerScenarios).values({
@@ -69,8 +76,8 @@ export const actions: Actions = {
 	},
 	deleteLibraryScenario: async ({ locals, request }) => {
 		if (!locals.user) throw redirect(303, '/login');
-		if (!locals.user.isAdmin)
-			return fail(403, { error: 'Only admins can delete library scenarios.' });
+		if (!canEditLibrary(locals.user))
+			return fail(403, { error: 'You do not have permission to delete library scenarios.' });
 
 		const form = await request.formData();
 		const scenarioId = String(form.get('scenarioId') ?? '');

@@ -26,6 +26,8 @@ export const user = pgTable('user', {
 	emailVerified: boolean('email_verified').default(false).notNull(),
 	image: text('image'),
 	isAdmin: boolean('is_admin').default(false).notNull(),
+	libraryAccessGranted: boolean('library_access_granted').default(false).notNull(),
+	libraryEditGranted: boolean('library_edit_granted').default(false).notNull(),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at')
 		.defaultNow()

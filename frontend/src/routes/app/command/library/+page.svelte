@@ -125,7 +125,7 @@
 
 		<div class="flex flex-col gap-2 sm:flex-row">
 			<Button variant="outline" href="/app/command">Back to Command</Button>
-			{#if data.user.isAdmin}
+			{#if data.canManageLibrary}
 				<form method="POST" action="?/createLibraryScenario">
 					<Button type="submit">+ New library scenario</Button>
 				</form>
@@ -166,7 +166,7 @@
 					{#if scenario.isNewThisWeek}
 						<Badge variant="outline">New this week</Badge>
 					{/if}
-					{#if data.user.isAdmin && scenario.status !== 'published'}
+					{#if data.canManageLibrary && scenario.status !== 'published'}
 						<Badge variant={scenario.status === 'scheduled' ? 'outline' : 'secondary'}>
 							{scenario.status === 'scheduled' ? 'Scheduled' : 'Draft'}
 						</Badge>
@@ -188,7 +188,7 @@
 				</div>
 
 				<div class="mt-auto flex flex-col gap-2 pt-5">
-					{#if data.user.isAdmin}
+					{#if data.canManageLibrary}
 						<div class="grid grid-cols-2 gap-2">
 							<Button
 								class="w-full"
@@ -239,14 +239,14 @@
 				{searchQuery ? 'No simulations match your search' : 'No library simulations yet'}
 			</p>
 			<p class="mt-1 text-sm text-muted-foreground">
-				{#if data.user.isAdmin}
+				{#if data.canManageLibrary}
 					Create a draft library scenario to start building the next 3AlarmLabs simulation.
 				{:else}
 					Check back soon for new premade simulations by 3AlarmLabs.
 				{/if}
 			</p>
 		</div>
-	{:else if data.user.isAdmin}
+	{:else if data.canManageLibrary}
 		<div class="mt-8 space-y-10">
 			{#if draftScenarios.length > 0}
 				<section>

@@ -58,12 +58,21 @@
 	</div>
 
 	<div class="overflow-x-auto rounded-xl border bg-card shadow-sm">
-		<table class="w-full text-sm">
+		<table class="w-full table-fixed text-sm">
+			<colgroup>
+				<col class="w-[20%]" />
+				<col class="w-[20%]" />
+				<col class="w-[10%]" />
+				<col class="w-[16%]" />
+				<col class="w-[9%]" />
+				<col class="w-[25%]" />
+			</colgroup>
 			<thead class="border-b bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
 				<tr>
 					<th class="px-4 py-3">User</th>
 					<th class="px-4 py-3">Organization</th>
 					<th class="px-4 py-3">Plan</th>
+					<th class="px-4 py-3">Library</th>
 					<th class="px-4 py-3">Joined</th>
 					<th class="px-4 py-3 text-right">Actions</th>
 				</tr>
@@ -73,43 +82,84 @@
 					{@const membership = u.organizationMemberships?.[0]}
 					{@const org = membership?.organization}
 					<tr class="align-top">
-						<td class="px-4 py-3">
-							<p class="font-medium">{u.name}</p>
-							<p class="mt-0.5 font-mono text-xs text-muted-foreground">{u.email}</p>
-							<div class="mt-2 flex flex-wrap gap-2">
+						<td class="min-w-0 px-4 py-3">
+							<p class="truncate font-medium">{u.name}</p>
+							<p class="mt-0.5 truncate font-mono text-xs text-muted-foreground" title={u.email}>
+								{u.email}
+							</p>
+							<div class="mt-2 flex flex-wrap gap-1.5">
 								{#if u.isAdmin}
 									<Badge variant="default">admin</Badge>
+								{/if}
+								{#if u.libraryEditGranted}
+									<Badge variant="secondary">library editor</Badge>
+								{:else if u.libraryAccessGranted}
+									<Badge variant="outline">library access</Badge>
 								{/if}
 								{#if membership?.role}
 									<Badge variant="outline">{membership.role}</Badge>
 								{/if}
 							</div>
 						</td>
-						<td class="px-4 py-3">
+						<td class="min-w-0 px-4 py-3">
 							{#if org}
-								<p class="font-medium">{org.name}</p>
-								<p class="mt-0.5 font-mono text-xs text-muted-foreground">{org.id}</p>
+								<p class="truncate font-medium" title={org.name}>{org.name}</p>
+								<p
+									class="mt-0.5 truncate font-mono text-xs text-muted-foreground"
+									title={org.id}
+								>
+									{org.id}
+								</p>
 							{:else}
 								<p class="text-muted-foreground">—</p>
 							{/if}
 						</td>
 						<td class="px-4 py-3">
 							{#if org}
-								<Badge variant="secondary">{org.planId}</Badge>
+								<Badge variant="secondary" class="max-w-full truncate">{org.planId}</Badge>
 							{:else}
 								<span class="text-muted-foreground">—</span>
 							{/if}
 						</td>
 						<td class="px-4 py-3">
+							{#if u.isAdmin}
+								<p class="text-xs text-muted-foreground">Full admin</p>
+							{:else}
+								<form method="POST" action="?/updateLibraryAccess" class="space-y-1.5">
+									<input type="hidden" name="userId" value={u.id} />
+									<label class="flex items-center gap-1.5 text-xs">
+										<input
+											type="checkbox"
+											name="libraryAccessGranted"
+											checked={u.libraryAccessGranted || u.libraryEditGranted}
+											disabled={u.libraryEditGranted}
+										/>
+										<span class="truncate">View library</span>
+									</label>
+									<label class="flex items-center gap-1.5 text-xs">
+										<input
+											type="checkbox"
+											name="libraryEditGranted"
+											checked={u.libraryEditGranted}
+										/>
+										<span class="truncate">Edit library sims</span>
+									</label>
+									<Button type="submit" size="sm" variant="outline" class="h-7 px-2">
+										Save
+									</Button>
+								</form>
+							{/if}
+						</td>
+						<td class="whitespace-nowrap px-4 py-3">
 							<p class="tabular-nums">{u.createdAt.toLocaleDateString()}</p>
 						</td>
 						<td class="px-4 py-3">
 							<div class="flex flex-col items-end gap-2">
-								<form method="POST" action="?/moveUser" class="flex items-center gap-2">
+								<form method="POST" action="?/moveUser" class="flex w-full max-w-full items-center gap-2">
 									<input type="hidden" name="userId" value={u.id} />
 									<select
 										name="organizationId"
-										class="h-9 rounded-md border bg-background px-2 text-sm"
+										class="h-9 min-w-0 flex-1 truncate rounded-md border bg-background px-2 text-sm"
 										aria-label="Organization"
 									>
 										{#each data.organizations as o (o.id)}

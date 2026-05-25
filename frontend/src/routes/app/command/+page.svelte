@@ -178,7 +178,7 @@
 	{/if}
 
 	<div class="mt-8 space-y-4">
-		{#if data.planConfig.canAccessLibrary}
+		{#if data.libraryAccess.canView}
 			<a
 				href={resolve('/app/command/library')}
 				class="group block overflow-hidden rounded-xl border bg-card shadow-sm transition hover:border-primary/50 hover:shadow-md"

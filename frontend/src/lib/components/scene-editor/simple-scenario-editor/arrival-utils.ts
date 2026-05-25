@@ -15,9 +15,9 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 export interface ScrambleArrivalsOptions {
-	/** Earliest possible offset in seconds. Default 15. */
+	/** Earliest possible offset in seconds. Default 10. */
 	minSeconds?: number;
-	/** Latest possible offset in seconds. Default 180 (3 min). */
+	/** Latest possible offset in seconds. Default 120 (2 min). */
 	maxSeconds?: number;
 	/** Minimum gap between consecutive arrivals after sorting. Default 8. */
 	minGapSeconds?: number;
@@ -33,8 +33,8 @@ export function scrambleArrivalOffsets(
 ): SimpleArrival[] {
 	if (arrivals.length === 0) return arrivals;
 
-	const minSeconds = clampNonNegInt(options.minSeconds ?? 15);
-	const maxSeconds = clampNonNegInt(options.maxSeconds ?? 180);
+	const minSeconds = clampNonNegInt(options.minSeconds ?? 10);
+	const maxSeconds = clampNonNegInt(options.maxSeconds ?? 120);
 	const minGapSeconds = clampNonNegInt(options.minGapSeconds ?? 8);
 	const window = Math.max(maxSeconds - minSeconds, 0);
 
@@ -51,6 +51,10 @@ export function scrambleArrivalOffsets(
 		if (shuffledSlots[i] - shuffledSlots[i - 1] < minGapSeconds) {
 			shuffledSlots[i] = Math.min(maxSeconds, shuffledSlots[i - 1] + minGapSeconds);
 		}
+	}
+
+	for (let i = 0; i < shuffledSlots.length; i += 1) {
+		shuffledSlots[i] = Math.min(maxSeconds, Math.max(minSeconds, shuffledSlots[i]));
 	}
 
 	return arrivals.map((arrival, index) => ({

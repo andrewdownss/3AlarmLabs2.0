@@ -757,7 +757,7 @@
 			</Card.Content>
 		</Card.Root>
 
-		{#if data.user.isAdmin}
+		{#if data.canEditLibrary && (data.scenario.isLibrary || data.user.isAdmin)}
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Library publishing</Card.Title>

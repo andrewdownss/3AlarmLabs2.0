@@ -22,6 +22,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 				name: true,
 				email: true,
 				isAdmin: true,
+				libraryAccessGranted: true,
+				libraryEditGranted: true,
 				createdAt: true
 			},
 			with: {
@@ -42,6 +44,36 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+	updateLibraryAccess: async ({ locals, request }) => {
+		requireAdmin(locals);
+
+		const form = await request.formData();
+		const userId = String(form.get('userId') ?? '').trim();
+		if (!userId) return fail(400, { error: 'userId required' });
+
+		const libraryAccessGranted = form.get('libraryAccessGranted') === 'on';
+		const libraryEditGranted = form.get('libraryEditGranted') === 'on';
+
+		const userRow = await db.query.user.findFirst({
+			where: eq(userTable.id, userId),
+			columns: { id: true, isAdmin: true }
+		});
+		if (!userRow) return fail(404, { error: 'User not found' });
+
+		await db
+			.update(userTable)
+			.set({
+				libraryAccessGranted: libraryAccessGranted || libraryEditGranted,
+				libraryEditGranted
+			})
+			.where(eq(userTable.id, userId));
+
+		invalidateLayoutCache(userId);
+		invalidateUserCache(userId);
+
+		return { success: true as const };
+	},
+
 	moveUser: async ({ locals, request }) => {
 		const admin = requireAdmin(locals);
 
@@ -129,4 +161,3 @@ export const actions: Actions = {
 		return { success: true as const };
 	}
 };
-

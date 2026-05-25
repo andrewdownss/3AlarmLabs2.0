@@ -5,6 +5,7 @@ import { db } from '$lib/server/db';
 import { organizationMembers, trainerScenarios } from '$lib/server/db/schema';
 import { getUtApi } from '$lib/server/utapi';
 import { isValidSelfPacedConfig, type SelfPacedConfig } from '$lib/self-paced';
+import { canEditLibrary, canOpenScenarioById } from '$lib/server/library-access';
 
 async function resolveOrgId(userId: string): Promise<string | null> {
 	const membership = await db.query.organizationMembers.findFirst({
@@ -18,9 +19,9 @@ function scenarioAccessFilter(
 	userId: string,
 	organizationId: string | null,
 	scenarioId: string,
-	isAdmin = false
+	openAnyScenario = false
 ) {
-	if (isAdmin) return eq(trainerScenarios.id, scenarioId);
+	if (openAnyScenario) return eq(trainerScenarios.id, scenarioId);
 	if (organizationId) {
 		return and(
 			eq(trainerScenarios.id, scenarioId),
@@ -35,14 +36,31 @@ function scenarioAccessFilter(
 	);
 }
 
+function canAccessScenario(user: NonNullable<App.Locals['user']>) {
+	return canOpenScenarioById(user);
+}
+
+function canEditLibraryScenario(user: NonNullable<App.Locals['user']>) {
+	return canEditLibrary(user);
+}
+
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) throw redirect(303, '/login');
 	const organizationId = await resolveOrgId(locals.user.id);
 	const scenario = await db.query.trainerScenarios.findFirst({
-		where: scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin)
+		where: scenarioAccessFilter(
+			locals.user.id,
+			organizationId,
+			params.id,
+			canAccessScenario(locals.user)
+		)
 	});
 	if (!scenario) throw redirect(303, '/app/command');
-	return { scenario, user: locals.user };
+	return {
+		scenario,
+		user: locals.user,
+		canEditLibrary: canEditLibraryScenario(locals.user)
+	};
 };
 
 export const actions: Actions = {
@@ -50,12 +68,17 @@ export const actions: Actions = {
 		if (!locals.user) throw redirect(303, '/login');
 		const organizationId = await resolveOrgId(locals.user.id);
 		const existingScenario = await db.query.trainerScenarios.findFirst({
-			where: scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin),
+			where: scenarioAccessFilter(
+				locals.user.id,
+				organizationId,
+				params.id,
+				canAccessScenario(locals.user)
+			),
 			columns: { isLibrary: true }
 		});
 		if (!existingScenario) return fail(404, { formError: 'Scenario not found.' });
-		if (existingScenario.isLibrary && !locals.user.isAdmin) {
-			return fail(403, { formError: 'Only admins can edit library scenarios.' });
+		if (existingScenario.isLibrary && !canEditLibraryScenario(locals.user)) {
+			return fail(403, { formError: 'You do not have permission to edit library scenarios.' });
 		}
 		const form = await request.formData();
 		const title = String(form.get('title') ?? '').trim();
@@ -83,7 +106,14 @@ export const actions: Actions = {
 				dispatchNotes: String(form.get('dispatchNotes') ?? '').trim() || null,
 				...(stageMetadataJson !== undefined ? { stageMetadataJson } : {})
 			})
-			.where(scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin));
+			.where(
+				scenarioAccessFilter(
+					locals.user.id,
+					organizationId,
+					params.id,
+					canAccessScenario(locals.user)
+				)
+			);
 
 		return { success: true };
 	},
@@ -91,12 +121,17 @@ export const actions: Actions = {
 		if (!locals.user) throw redirect(303, '/login');
 		const organizationId = await resolveOrgId(locals.user.id);
 		const existingScenario = await db.query.trainerScenarios.findFirst({
-			where: scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin),
+			where: scenarioAccessFilter(
+				locals.user.id,
+				organizationId,
+				params.id,
+				canAccessScenario(locals.user)
+			),
 			columns: { isLibrary: true }
 		});
 		if (!existingScenario) return fail(404, { selfPacedError: 'Scenario not found.' });
-		if (existingScenario.isLibrary && !locals.user.isAdmin) {
-			return fail(403, { selfPacedError: 'Only admins can edit library scenarios.' });
+		if (existingScenario.isLibrary && !canEditLibraryScenario(locals.user)) {
+			return fail(403, { selfPacedError: 'You do not have permission to edit library scenarios.' });
 		}
 		const form = await request.formData();
 		const raw = String(form.get('selfPacedConfigJson') ?? '').trim();
@@ -123,7 +158,14 @@ export const actions: Actions = {
 		await db
 			.update(trainerScenarios)
 			.set({ selfPacedConfigJson: configValue })
-			.where(scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin));
+			.where(
+				scenarioAccessFilter(
+					locals.user.id,
+					organizationId,
+					params.id,
+					canAccessScenario(locals.user)
+				)
+			);
 
 		return { selfPacedSaved: true };
 	},
@@ -131,12 +173,17 @@ export const actions: Actions = {
 		if (!locals.user) throw redirect(303, '/login');
 		const organizationId = await resolveOrgId(locals.user.id);
 		const existingScenario = await db.query.trainerScenarios.findFirst({
-			where: scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin),
+			where: scenarioAccessFilter(
+				locals.user.id,
+				organizationId,
+				params.id,
+				canAccessScenario(locals.user)
+			),
 			columns: { isLibrary: true }
 		});
 		if (!existingScenario) return fail(404, { error: 'Scenario not found.' });
-		if (existingScenario.isLibrary && !locals.user.isAdmin) {
-			return fail(403, { error: 'Only admins can edit library scenarios.' });
+		if (existingScenario.isLibrary && !canEditLibraryScenario(locals.user)) {
+			return fail(403, { error: 'You do not have permission to edit library scenarios.' });
 		}
 		const form = await request.formData();
 		const side = String(form.get('side') ?? '');
@@ -171,7 +218,14 @@ export const actions: Actions = {
 			.set({
 				[side]: uploadResult.data.ufsUrl
 			})
-			.where(scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin));
+			.where(
+				scenarioAccessFilter(
+					locals.user.id,
+					organizationId,
+					params.id,
+					canAccessScenario(locals.user)
+				)
+			);
 
 		return { success: true };
 	},
@@ -183,12 +237,17 @@ export const actions: Actions = {
 		if (!unitName) return fail(400, { error: 'Unit name required.' });
 
 		const scenario = await db.query.trainerScenarios.findFirst({
-			where: scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin),
+			where: scenarioAccessFilter(
+				locals.user.id,
+				organizationId,
+				params.id,
+				canAccessScenario(locals.user)
+			),
 			columns: { defaultResources: true, isLibrary: true }
 		});
 		if (!scenario) return fail(404);
-		if (scenario.isLibrary && !locals.user.isAdmin) {
-			return fail(403, { error: 'Only admins can edit library scenarios.' });
+		if (scenario.isLibrary && !canEditLibraryScenario(locals.user)) {
+			return fail(403, { error: 'You do not have permission to edit library scenarios.' });
 		}
 
 		const existingResources = scenario.defaultResources ?? [];
@@ -198,7 +257,14 @@ export const actions: Actions = {
 		await db
 			.update(trainerScenarios)
 			.set({ defaultResources: resources })
-			.where(scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin));
+			.where(
+				scenarioAccessFilter(
+					locals.user.id,
+					organizationId,
+					params.id,
+					canAccessScenario(locals.user)
+				)
+			);
 		return { success: true };
 	},
 	removeResource: async ({ locals, params, request }) => {
@@ -208,28 +274,51 @@ export const actions: Actions = {
 		const unitName = String(form.get('unitName') ?? '');
 
 		const scenario = await db.query.trainerScenarios.findFirst({
-			where: scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin),
+			where: scenarioAccessFilter(
+				locals.user.id,
+				organizationId,
+				params.id,
+				canAccessScenario(locals.user)
+			),
 			columns: { defaultResources: true, isLibrary: true }
 		});
 		if (!scenario) return fail(404);
-		if (scenario.isLibrary && !locals.user.isAdmin) {
-			return fail(403, { error: 'Only admins can edit library scenarios.' });
+		if (scenario.isLibrary && !canEditLibraryScenario(locals.user)) {
+			return fail(403, { error: 'You do not have permission to edit library scenarios.' });
 		}
 
 		const resources = (scenario.defaultResources ?? []).filter((r) => r.unitName !== unitName);
 		await db
 			.update(trainerScenarios)
 			.set({ defaultResources: resources })
-			.where(scenarioAccessFilter(locals.user.id, organizationId, params.id, locals.user.isAdmin));
+			.where(
+				scenarioAccessFilter(
+					locals.user.id,
+					organizationId,
+					params.id,
+					canAccessScenario(locals.user)
+				)
+			);
 		return { success: true };
 	},
 	publishToLibrary: async ({ locals, params, request }) => {
 		if (!locals.user) throw redirect(303, '/login');
-		if (!locals.user.isAdmin)
-			return fail(403, { error: 'Only admins can publish library scenarios.' });
+		if (!canEditLibraryScenario(locals.user)) {
+			return fail(403, { error: 'You do not have permission to manage library publishing.' });
+		}
+
+		const existing = await db.query.trainerScenarios.findFirst({
+			where: eq(trainerScenarios.id, params.id),
+			columns: { isLibrary: true }
+		});
+		if (!existing) return fail(404, { error: 'Scenario not found.' });
 
 		const form = await request.formData();
 		const isLibrary = form.get('isLibrary') === 'on';
+		if (isLibrary !== existing.isLibrary && !locals.user.isAdmin) {
+			return fail(403, { error: 'Only admins can add or remove scenarios from the library catalog.' });
+		}
+
 		const rawPublishedAt = String(form.get('publishedAt') ?? '').trim();
 		const publishedAt = isLibrary ? (rawPublishedAt ? new Date(rawPublishedAt) : new Date()) : null;
 
