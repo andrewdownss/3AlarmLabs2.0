@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { and, eq, desc, isNull, lte, or } from 'drizzle-orm';
+import { and, count, eq, desc, isNull, lte, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	organizationMembers,
@@ -16,6 +16,7 @@ import {
 	getPlanConfig,
 	normalizePlanId
 } from '$lib/plans';
+import { cloneSelfPacedConfig, duplicateScenarioTitle } from '$lib/server/scenario-clone';
 
 export const load: PageServerLoad = async ({ locals, depends, parent }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -116,6 +117,90 @@ export const actions: Actions = {
 
 		await db.delete(trainerScenarios).where(eq(trainerScenarios.id, scenarioId));
 		return { deleted: true };
+	},
+	duplicateScenario: async ({ locals, request }) => {
+		if (!locals.user) throw redirect(303, '/login');
+		const form = await request.formData();
+		const scenarioId = String(form.get('scenarioId') ?? '');
+		if (!scenarioId) return fail(400, { error: 'Missing scenario ID.' });
+
+		const membership = await db.query.organizationMembers.findFirst({
+			where: eq(organizationMembers.userId, locals.user.id),
+			columns: { organizationId: true }
+		});
+		const organizationId = membership?.organizationId ?? null;
+
+		const source = await db.query.trainerScenarios.findFirst({
+			where: and(
+				eq(trainerScenarios.id, scenarioId),
+				organizationId
+					? eq(trainerScenarios.organizationId, organizationId)
+					: and(
+							eq(trainerScenarios.createdBy, locals.user.id),
+							isNull(trainerScenarios.organizationId)
+						)
+			)
+		});
+		if (!source) return fail(404, { error: 'Scenario not found.' });
+		if (source.isLibrary && !locals.user.isAdmin) {
+			return fail(403, { error: 'Library scenarios can only be duplicated by admins.' });
+		}
+
+		const orgRow = organizationId
+			? await db.query.organizations.findFirst({
+					where: eq(organizations.id, organizationId),
+					columns: { planId: true }
+				})
+			: null;
+		const planConfig = getPlanConfig(normalizePlanId(orgRow?.planId));
+
+		const scenarioCountResult = await db
+			.select({ value: count() })
+			.from(trainerScenarios)
+			.where(
+				organizationId
+					? and(
+							eq(trainerScenarios.organizationId, organizationId),
+							eq(trainerScenarios.isLibrary, false)
+						)
+					: and(
+							eq(trainerScenarios.createdBy, locals.user.id),
+							isNull(trainerScenarios.organizationId),
+							eq(trainerScenarios.isLibrary, false)
+						)
+			);
+		const scenarioCount = scenarioCountResult[0]?.value ?? 0;
+		if (!canCreateCommandScenario(planConfig, scenarioCount)) {
+			return fail(403, {
+				error: `You've reached the active scenario limit for the ${planConfig.name} plan.`
+			});
+		}
+
+		const newId = crypto.randomUUID();
+		await db.insert(trainerScenarios).values({
+			id: newId,
+			title: duplicateScenarioTitle(source.title),
+			description: source.description,
+			organizationId: source.organizationId,
+			createdBy: locals.user.id,
+			constructionType: source.constructionType,
+			address: source.address,
+			occupancyType: source.occupancyType,
+			alarmLevel: source.alarmLevel,
+			sideAlphaImageUrl: source.sideAlphaImageUrl,
+			sideBravoImageUrl: source.sideBravoImageUrl,
+			sideCharlieImageUrl: source.sideCharlieImageUrl,
+			sideDeltaImageUrl: source.sideDeltaImageUrl,
+			dispatchNotes: source.dispatchNotes,
+			selfPacedConfigJson: cloneSelfPacedConfig(source.selfPacedConfigJson),
+			stageMetadataJson: structuredClone(source.stageMetadataJson ?? {}),
+			defaultResources: structuredClone(source.defaultResources ?? []),
+			isLibrary: false,
+			isDemoScenario: false,
+			publishedAt: null
+		});
+
+		return { scenarioId: newId };
 	},
 	startSession: async ({ locals, request }) => {
 		if (!locals.user) throw redirect(303, '/login');

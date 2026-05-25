@@ -9,7 +9,41 @@
 
 	let { data }: { data: PageData } = $props();
 	let deletingId = $state<string | null>(null);
+	let duplicatingId = $state<string | null>(null);
 	let starting = $state<string | null>(null);
+
+	async function handleDuplicate(id: string) {
+		if (duplicatingId) return;
+		duplicatingId = id;
+		try {
+			const fd = new FormData();
+			fd.set('scenarioId', id);
+			const resp = await fetch('?/duplicateScenario', {
+				method: 'POST',
+				body: fd,
+				credentials: 'same-origin'
+			});
+			const result = deserialize(await resp.text());
+			if (
+				result.type === 'success' &&
+				result.data &&
+				typeof result.data === 'object' &&
+				'scenarioId' in result.data
+			) {
+				window.location.href = `/app/command/scenarios/${String((result.data as { scenarioId: string }).scenarioId)}`;
+			} else if (result.type === 'redirect') {
+				window.location.href = result.location;
+			} else if (result.type === 'failure') {
+				const err =
+					result.data && typeof result.data === 'object' && 'error' in result.data
+						? String((result.data as { error?: string }).error)
+						: 'Could not duplicate scenario';
+				alert(err);
+			}
+		} finally {
+			duplicatingId = null;
+		}
+	}
 
 	async function handleDelete(id: string) {
 		if (!confirm('Delete this scenario?')) return;
@@ -283,6 +317,18 @@
 							variant="outline"
 							href={`/app/command/scenarios/${scenario.id}`}>Edit</Button
 						>
+						<Button
+							class="min-h-11 w-full sm:w-auto"
+							size="sm"
+							variant="outline"
+							disabled={!data.canCreateScenario || duplicatingId !== null}
+							onclick={() => handleDuplicate(scenario.id)}
+						>
+							{#if duplicatingId === scenario.id}
+								<Spinner class="mr-2 h-4 w-4" />
+							{/if}
+							Duplicate
+						</Button>
 						<button
 							type="button"
 							onclick={() => handleDelete(scenario.id)}

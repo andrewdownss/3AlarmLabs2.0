@@ -13,11 +13,19 @@
 		rebuildTimelineFromSimpleSections,
 		SIMPLE_SIDES,
 		SIMPLE_STAGES,
+		STAGE_THEME,
 		type SimpleArrival,
 		type SimpleScenarioSections,
 		type SimpleStageEvent,
 		type SimpleStageKey
 	} from './stage-mapping';
+	import {
+		ACTION_PRESET_GROUPS,
+		createRuleFromPreset,
+		presetsForGroup,
+		type ActionPresetGroup
+	} from './action-presets';
+	import { resetArrivalStagger, scrambleArrivalOffsets } from './arrival-utils';
 
 	interface DefaultResource {
 		unitName: string;
@@ -224,6 +232,28 @@
 		updateActionRules([...config.assignmentCompletions, next]);
 	}
 
+	function addPresetRules(group: ActionPresetGroup) {
+		const presets = presetsForGroup(group);
+		const rules = presets.map((preset) => createRuleFromPreset(preset, unitOptions));
+		updateActionRules([...config.assignmentCompletions, ...rules]);
+	}
+
+	function scrambleArrivals() {
+		if (sections.arrivals.length < 2) return;
+		commit({
+			...sections,
+			arrivals: scrambleArrivalOffsets(sections.arrivals)
+		});
+	}
+
+	function resetArrivalsStagger() {
+		if (sections.arrivals.length === 0) return;
+		commit({
+			...sections,
+			arrivals: resetArrivalStagger(sections.arrivals)
+		});
+	}
+
 	function removeActionUpdate(id: string) {
 		updateActionRules(config.assignmentCompletions.filter((rule) => rule.id !== id));
 	}
@@ -391,9 +421,21 @@
 					Choose from this scenario's resources and set when each unit arrives.
 				</p>
 			</div>
-			<Button type="button" size="sm" variant="outline" onclick={() => addArrival()}>
-				+ Add arrival
-			</Button>
+			<div class="flex flex-wrap gap-2">
+				{#if sections.arrivals.length >= 2}
+					<Button type="button" size="sm" variant="outline" onclick={scrambleArrivals}>
+						Scramble times
+					</Button>
+				{/if}
+				{#if sections.arrivals.length > 0}
+					<Button type="button" size="sm" variant="outline" onclick={resetArrivalsStagger}>
+						Reset stagger
+					</Button>
+				{/if}
+				<Button type="button" size="sm" variant="outline" onclick={() => addArrival()}>
+					+ Add arrival
+				</Button>
+			</div>
 		</div>
 
 		{#if sections.arrivals.length === 0}
@@ -515,6 +557,26 @@
 			<Button type="button" size="sm" variant="outline" onclick={addActionUpdate}>
 				+ Add action update
 			</Button>
+		</div>
+
+		<div class="rounded-lg border border-dashed border-muted-foreground/25 bg-muted/10 p-3">
+			<p class="text-xs font-medium text-foreground">Quick presets</p>
+			<p class="mt-0.5 text-[11px] text-muted-foreground">
+				Add a full set of common company work rules. Units are matched by name (Engine, Truck,
+				Ladder, Rescue, etc.).
+			</p>
+			<div class="mt-2 flex flex-wrap gap-2">
+				{#each ACTION_PRESET_GROUPS as group (group.key)}
+					<Button
+						type="button"
+						size="sm"
+						variant="secondary"
+						onclick={() => addPresetRules(group.key)}
+					>
+						+ {group.label} work
+					</Button>
+				{/each}
+			</div>
 		</div>
 
 		{#if config.assignmentCompletions.length === 0}
@@ -667,12 +729,15 @@
 	{#each SIMPLE_STAGES as stage (stage.key)}
 		{@const section = getStage(stage.key)}
 		{@const nextStart = getNextStageStart(stage.key)}
-		<section class="space-y-3 rounded-xl border bg-background p-4">
+		{@const theme = STAGE_THEME[stage.key]}
+		<section class="relative space-y-3 overflow-hidden rounded-xl border p-4 {theme.section}">
+			<div class="absolute top-0 left-0 h-full w-1.5 {theme.rail}" aria-hidden="true"></div>
+			<div class="pl-2">
 			<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
 				<div>
 					<div class="flex flex-wrap items-center gap-2">
 						<h5 class="font-semibold">{stage.label}</h5>
-						<Badge variant="outline">{section.events.length} events</Badge>
+						<Badge variant="outline" class={theme.badge}>{section.events.length} events</Badge>
 					</div>
 					<p class="mt-1 text-xs text-muted-foreground">
 						Stage starts at
@@ -848,6 +913,7 @@
 					{/each}
 				</div>
 			{/if}
+			</div>
 		</section>
 	{/each}
 

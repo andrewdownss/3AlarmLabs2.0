@@ -19,6 +19,47 @@ export const SIMPLE_SIDES = [
 export type SimpleStageKey = (typeof SIMPLE_STAGES)[number]['key'];
 export type SimpleSideKey = (typeof SIMPLE_SIDES)[number]['key'];
 
+/** Theme-aware Tailwind classes for fire stage visual hierarchy in the editor. */
+export const STAGE_THEME: Record<
+	SimpleStageKey,
+	{
+		section: string;
+		rail: string;
+		badge: string;
+		dot: string;
+	}
+> = {
+	incipient: {
+		section:
+			'border-emerald-200/70 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20',
+		rail: 'bg-emerald-500',
+		badge:
+			'border-emerald-300/60 bg-emerald-100/80 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100',
+		dot: 'bg-emerald-500 ring-emerald-500/30'
+	},
+	growth: {
+		section: 'border-amber-200/70 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20',
+		rail: 'bg-amber-500',
+		badge:
+			'border-amber-300/60 bg-amber-100/80 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100',
+		dot: 'bg-amber-500 ring-amber-500/30'
+	},
+	fully_developed: {
+		section: 'border-orange-200/70 bg-orange-50/40 dark:border-orange-900/50 dark:bg-orange-950/20',
+		rail: 'bg-orange-600',
+		badge:
+			'border-orange-300/60 bg-orange-100/80 text-orange-900 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-100',
+		dot: 'bg-orange-600 ring-orange-600/30'
+	},
+	decay: {
+		section: 'border-slate-300/70 bg-slate-100/50 dark:border-slate-700/50 dark:bg-slate-900/30',
+		rail: 'bg-slate-500',
+		badge:
+			'border-slate-300/60 bg-slate-100/80 text-slate-800 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200',
+		dot: 'bg-slate-500 ring-slate-500/30'
+	}
+};
+
 export interface SimpleArrival {
 	id: string;
 	unitName: string;

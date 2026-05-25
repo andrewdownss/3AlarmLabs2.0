@@ -4,6 +4,12 @@
 	import { Input } from '$lib/components/ui/input';
 	import type { ExpectedAction, TimelineEvent } from '$lib/self-paced';
 	import {
+		isArrivalEvent,
+		isStageTransitionEvent,
+		STAGE_THEME,
+		type SimpleStageKey
+	} from '../simple-scenario-editor/stage-mapping';
+	import {
 		clampSeconds,
 		formatTimelineTime,
 		percentToSeconds,
@@ -135,6 +141,18 @@
 			offsetSeconds: clampSeconds((item.offsetSeconds ?? 0) + delta, axisMaxSeconds)
 		});
 	}
+
+	function dotTheme(item: TimelineEvent): { dot: string; label: string } {
+		if (isStageTransitionEvent(item) && item.dispatch.stage) {
+			const stage = item.dispatch.stage as SimpleStageKey;
+			const theme = STAGE_THEME[stage];
+			return { dot: theme.dot, label: `Stage: ${stage.replace('_', ' ')}` };
+		}
+		if (isArrivalEvent(item)) {
+			return { dot: 'bg-sky-500 ring-sky-500/30', label: 'Arrival' };
+		}
+		return { dot: 'bg-primary ring-primary/25', label: 'Event' };
+	}
 </script>
 
 <div class="rounded-xl border border-border bg-muted/10 p-4 dark:bg-muted/5">
@@ -208,6 +226,7 @@
 
 		{#each sortedTimeline as item, index (item.id)}
 			{@const pct = secondsToPercent(item.offsetSeconds ?? 0, axisMaxSeconds)}
+			{@const theme = dotTheme(item)}
 			<button
 				data-timeline-dot
 				type="button"
@@ -220,10 +239,10 @@
 					event.stopPropagation();
 					selectedId = item.id;
 				}}
-				title="{formatTimelineTime(item.offsetSeconds ?? 0)} — {item.label || `Event ${index + 1}`}"
+				title="{formatTimelineTime(item.offsetSeconds ?? 0)} — {item.label?.trim() || theme.label || `Event ${index + 1}`}"
 			>
 				<span
-					class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-background bg-primary text-sm font-bold text-primary-foreground shadow-md ring-2 ring-primary/25"
+					class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-background text-sm font-bold text-white shadow-md ring-2 {theme.dot}"
 				>
 					{index + 1}
 				</span>
