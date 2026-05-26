@@ -43,10 +43,9 @@ export const load: PageServerLoad = async ({ cookies, params }) => {
 		const participant = await db.query.classroomParticipants.findFirst({
 			where: and(
 				eq(classroomParticipants.id, payload.participantId),
-				eq(classroomParticipants.classroomId, classroom.id),
-				isNull(classroomParticipants.kickedAt)
+				eq(classroomParticipants.classroomId, classroom.id)
 			),
-			columns: { id: true }
+			columns: { id: true, kickedAt: true }
 		});
 		if (participant) throw redirect(303, `/classroom/${code}/live`);
 	}

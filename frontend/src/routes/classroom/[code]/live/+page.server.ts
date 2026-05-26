@@ -30,13 +30,28 @@ export const load: PageServerLoad = async ({ cookies, params }) => {
 
 	const participant = await db.query.classroomParticipants.findFirst({
 		where: and(
-			eq(classroomParticipants.id, payload.participantId),
-			eq(classroomParticipants.classroomId, classroom.id),
-			isNull(classroomParticipants.kickedAt)
+		 eq(classroomParticipants.id, payload.participantId),
+		 eq(classroomParticipants.classroomId, classroom.id)
 		),
-		columns: { id: true, displayName: true }
+		columns: { id: true, displayName: true, kickedAt: true }
 	});
 	if (!participant) throw redirect(303, `/classroom/${code}`);
+
+	if (participant.kickedAt) {
+		return {
+			sessionEndedReason: 'kicked' as const,
+			classroom: {
+				id: classroom.id,
+				code: classroom.code,
+				name: classroom.name,
+				calledOnParticipantId: null
+			},
+			participant: { id: participant.id, displayName: participant.displayName },
+			activeSession: null,
+			scenario: null,
+			boardEntries: []
+		};
+	}
 
 	await db
 		.update(classroomParticipants)
@@ -82,6 +97,7 @@ export const load: PageServerLoad = async ({ cookies, params }) => {
 		: [null, []];
 
 	return {
+		sessionEndedReason: null,
 		classroom,
 		participant,
 		activeSession,

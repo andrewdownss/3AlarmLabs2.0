@@ -17,6 +17,8 @@
 	} from '$lib/trainer-command-board';
 	import type { PageData } from './$types';
 
+	type SessionEndedReason = 'classroom_ended' | 'kicked';
+
 	let { data }: { data: PageData } = $props();
 
 	interface BoardEntry {
@@ -93,24 +95,24 @@
 	let currentSide = $state(initialLiveState.currentSide);
 	let calledOnParticipantId = $state(initialLiveState.calledOnParticipantId);
 	let boardEntries = $state<BoardEntry[]>(initialLiveState.boardEntries);
-let classroomEnded = $state(false);
+	let sessionEndedReason = $state<SessionEndedReason | null>(data.sessionEndedReason);
 	let connectionStatus = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 	let radioError = $state<string | null>(null);
 	let isRecording = $state(false);
 	let isProcessing = $state(false);
 	let isArmingMic = $state(false);
 	let lastTranscript = $state<string | null>(null);
-let sessionSeconds = $state(0);
-let timelineEvents = $state<Array<{ id: string; type: string; text: string; time: string }>>(
-	initialLiveState.hasStarted
-		? [{ id: '0', type: 'START', text: 'Session started', time: '00:00' }]
-		: []
-);
+	let sessionSeconds = $state(0);
+	let timelineEvents = $state<Array<{ id: string; type: string; text: string; time: string }>>(
+		initialLiveState.hasStarted
+			? [{ id: '0', type: 'START', text: 'Session started', time: '00:00' }]
+			: []
+	);
 	let mediaRecorder: MediaRecorder | null = null;
 	let audioChunks: Blob[] = [];
 	let activeStream: MediaStream | null = null;
 	let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-let clockInterval: ReturnType<typeof setInterval> | null = null;
+	let clockInterval: ReturnType<typeof setInterval> | null = null;
 
 	const isCalledOn = $derived(calledOnParticipantId === data.participant.id);
 	const isLive = $derived(Boolean(activeSessionId && hasStarted && scenario));
@@ -125,38 +127,48 @@ let clockInterval: ReturnType<typeof setInterval> | null = null;
 		return map[currentSide as keyof typeof map] ?? scenario.sideAlphaImageUrl ?? null;
 	});
 
-function formatClock(seconds: number) {
-	const m = Math.floor(seconds / 60)
-		.toString()
-		.padStart(2, '0');
-	const s = (seconds % 60).toString().padStart(2, '0');
-	return `${m}:${s}`;
-}
+	function formatClock(seconds: number) {
+		const m = Math.floor(seconds / 60)
+			.toString()
+			.padStart(2, '0');
+		const s = (seconds % 60).toString().padStart(2, '0');
+		return `${m}:${s}`;
+	}
 
-function syncClock(startedAtIso: string) {
-	const elapsed = Math.floor((Date.now() - new Date(startedAtIso).getTime()) / 1000);
-	sessionSeconds = Math.max(0, elapsed);
-}
+	function syncClock(startedAtIso: string) {
+		const elapsed = Math.floor((Date.now() - new Date(startedAtIso).getTime()) / 1000);
+		sessionSeconds = Math.max(0, elapsed);
+	}
 
-function resetTimeline(started = false) {
-	timelineEvents = started
-		? [{ id: '0', type: 'START', text: 'Session started', time: '00:00' }]
-		: [];
-}
+	function resetTimeline(started = false) {
+		timelineEvents = started
+			? [{ id: '0', type: 'START', text: 'Session started', time: '00:00' }]
+			: [];
+	}
 
-function addTimelineEvent(type: string, text: string, atSeconds = sessionSeconds) {
-	timelineEvents = [
-		...timelineEvents,
-		{ id: crypto.randomUUID(), type, text, time: formatClock(atSeconds) }
-	];
-}
+	function addTimelineEvent(type: string, text: string, atSeconds = sessionSeconds) {
+		timelineEvents = [
+			...timelineEvents,
+			{ id: crypto.randomUUID(), type, text, time: formatClock(atSeconds) }
+		];
+	}
 
-function formatBoardTimelineLine(entry: BoardEntry) {
-	return formatUnitAssignmentLine({
-		...entry,
-		assignment: entry.assignment ?? ''
-	} as BoardEntryLike);
-}
+	function formatBoardTimelineLine(entry: BoardEntry) {
+		return formatUnitAssignmentLine({
+			...entry,
+			assignment: entry.assignment ?? ''
+		} as BoardEntryLike);
+	}
+
+	function showSessionEnded(reason: SessionEndedReason) {
+		sessionEndedReason = reason;
+		activeSessionId = null;
+		hasStarted = false;
+		scenario = null;
+		boardEntries = [];
+		calledOnParticipantId = null;
+		stopRecording();
+	}
 
 	type StageOverlays = Record<string, AnimationOverlay[]>;
 	type SideStageOverlays = Record<string, StageOverlays>;
@@ -258,6 +270,8 @@ function formatBoardTimelineLine(entry: BoardEntry) {
 	}
 
 	onMount(() => {
+		if (sessionEndedReason) return;
+
 		if (!socket) {
 			connectionStatus = 'disconnected';
 			return;
@@ -272,7 +286,7 @@ function formatBoardTimelineLine(entry: BoardEntry) {
 		socket.on('disconnect', () => (connectionStatus = 'disconnected'));
 		socket.on('classroom:snapshot', (payload) => {
 			connectionStatus = 'connected';
-			classroomEnded = false;
+			sessionEndedReason = null;
 			activeSessionId = payload.activeSession?.id ?? null;
 			hasStarted = Boolean(payload.activeSession?.hasStarted);
 			scenario = payload.scenario ?? null;
@@ -291,7 +305,7 @@ function formatBoardTimelineLine(entry: BoardEntry) {
 			}
 		});
 		socket.on('classroom:scenario-loaded', (payload) => {
-			classroomEnded = false;
+			sessionEndedReason = null;
 			activeSessionId = payload.session?.id ?? null;
 			hasStarted = Boolean(payload.session?.hasStarted);
 			scenario = payload.scenario ?? null;
@@ -321,16 +335,10 @@ function formatBoardTimelineLine(entry: BoardEntry) {
 			if (calledOnParticipantId !== data.participant.id) stopRecording();
 		});
 		socket.on('classroom:kicked', () => {
-			window.location.href = `/classroom/${data.classroom.code}`;
+			showSessionEnded('kicked');
 		});
 		socket.on('classroom:ended', () => {
-			classroomEnded = true;
-			activeSessionId = null;
-			hasStarted = false;
-			scenario = null;
-			boardEntries = [];
-			calledOnParticipantId = null;
-			stopRecording();
+			showSessionEnded('classroom_ended');
 		});
 		socket.on('trainer:session:ended', (payload?: { reason?: string }) => {
 			addTimelineEvent('END', payload?.reason === 'classroom_ended' ? 'Classroom ended' : 'Simulation ended');
@@ -449,7 +457,7 @@ function formatBoardTimelineLine(entry: BoardEntry) {
 		</div>
 	</header>
 
-	{#if classroomEnded}
+	{#if sessionEndedReason}
 		<div class="flex flex-1 items-center justify-center overflow-y-auto p-4 sm:p-6">
 			<div class="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
 				<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -457,7 +465,11 @@ function formatBoardTimelineLine(entry: BoardEntry) {
 				</div>
 				<h2 class="text-xl font-semibold">Session has ended</h2>
 				<p class="mt-3 text-sm text-muted-foreground">
-					Your instructor ended this classroom session. You can close this tab.
+					{#if sessionEndedReason === 'kicked'}
+						You were removed from this classroom by the instructor. You can close this tab.
+					{:else}
+						Your instructor ended this classroom session. You can close this tab.
+					{/if}
 				</p>
 			</div>
 		</div>
