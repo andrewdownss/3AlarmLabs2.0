@@ -14,27 +14,205 @@ export interface SeoLink {
 	href: string;
 }
 
+export interface AudienceCard {
+	id: string;
+	title: string;
+	description: string;
+	bullets: string[];
+}
+
+export interface CollaborationPartner {
+	id: string;
+	label: string;
+	description: string;
+}
+
+export interface Testimonial {
+	id: string;
+	quote: string;
+	name: string;
+	role: string;
+	org: string;
+}
+
+export interface PricingPath {
+	id: string;
+	label: string;
+	title: string;
+	price: string;
+	description: string;
+	cta: string;
+	href: string;
+	highlight?: boolean;
+}
+
+/** Primary public conversion paths */
+export const DEMO_HREF = '/demo';
+export const TEAM_ACCESS_HREF = '#team-access';
+export const INDIVIDUAL_SIGNUP_HREF = '/signup?next=%2Fapp%2Fstart-individual';
+export const SAVE_REPLAY_SIGNUP_HREF = '/signup?next=%2Fapp%2Fcommand';
+
+export const heroHeadline = 'Practice command before the tones drop.';
+export const heroSubheading =
+	'Step into realistic fireground scenarios with radio traffic, unit assignments, shifting conditions, and replay review. Train solo for the next seat up, or run it with your crew.';
+export const heroSupportLine =
+	'Try a free scenario first. Individual plans start at $14.99/month, with department and training company access available.';
+
+export const freeScenarioSection = {
+	eyebrow: 'Free scenario',
+	title: 'Take the seat for a working fire. No account needed.',
+	description:
+		'Start with a residential working fire and see how it feels. Give assignments, manage the board, use push-to-talk radio, and review the run afterward. Quick, practical, and a little unforgiving in the right ways.',
+	bullets: [
+		'A complete self-paced command scenario',
+		'Push-to-talk radio that understands your assignments',
+		'A command board that keeps changing as the call develops',
+		'Replay review when the run is over'
+	],
+	cta: 'Run the free scenario'
+};
+
+export const builtForEveryLevel: AudienceCard[] = [
+	{
+		id: 'firefighters',
+		title: 'Firefighters',
+		description: 'Get command reps when you can grab them: at the station, at home, or before the next promotional process sneaks up.',
+		bullets: [
+			'Self-paced scenarios whenever you have time',
+			'Radio practice, size-up, and board discipline',
+			'Replay review after each run'
+		]
+	},
+	{
+		id: 'departments',
+		title: 'Fire departments',
+		description: 'Give members a place to practice command before the drill tower, the assessment center, or the real thing.',
+		bullets: [
+			'Access for teams, companies, and academies',
+			'Instructor-led command sessions',
+			'Shared workspace and scenario library'
+		]
+	},
+	{
+		id: 'training-companies',
+		title: 'Training companies',
+		description: 'Bring clients into command simulations without hauling out a pile of props, whiteboards, and "pretend this is smoke" explanations.',
+		bullets: [
+			'Commercial training use',
+			'Classroom and instructor modes',
+			'Custom agreements and invoicing'
+		]
+	}
+];
+
+export const builtWithFireService = {
+	eyebrow: 'Built with the fire service',
+	title: 'Built with people who actually run incidents',
+	description:
+		'3AlarmLabs is shaped with training companies, fire departments, and individual firefighters, so the simulator follows real command habits instead of generic click-through training.',
+	partners: [
+		{
+			id: 'training-companies',
+			label: 'Training companies',
+			description: 'Scenario design and instructor workflows informed by providers who teach command for a living.'
+		},
+		{
+			id: 'departments',
+			label: 'Fire departments',
+			description: 'Department pilots and academy feedback help shape session modes, team access, and the small details that matter.'
+		},
+		{
+			id: 'firefighters',
+			label: 'Individual firefighters',
+			description: 'Self-paced reps and replay review refined with officers and officer candidates preparing to lead.'
+		}
+	] satisfies CollaborationPartner[]
+};
+
+export const testimonials: Testimonial[] = [
+	{
+		id: 'acting-officer',
+		quote:
+			'I finally have a way to get command reps without waiting around for drill night. The radio traffic and board tracking feel close enough to the real job that it exposes your habits fast.',
+		name: 'Acting Officer',
+		role: 'Company officer candidate',
+		org: 'Career department, Midwest'
+	},
+	{
+		id: 'training-officer',
+		quote:
+			'We use it between live sessions, almost like homework that people will actually do. Students come in sharper on assignments, radio discipline, and just keeping the incident organized.',
+		name: 'Training Officer',
+		role: 'Academy instructor',
+		org: 'Regional fire academy'
+	}
+];
+
+export function pricingPaths(monthlyPrice: number): PricingPath[] {
+	const salesMail =
+		'mailto:andrew@3alarmlabs.com?subject=' + encodeURIComponent('Team access — 3AlarmLabs');
+	return [
+		{
+			id: 'free',
+			label: 'Try first',
+			title: 'Free scenario',
+			price: '$0',
+			description: 'Run one self-paced command scenario with limited radio. No account required, no weird hoops.',
+			cta: 'Try the free scenario',
+			href: DEMO_HREF
+		},
+		{
+			id: 'individual',
+			label: 'Self-serve',
+			title: 'Individual',
+			price: `$${monthlyPrice.toFixed(2)}/mo`,
+			description: 'Unlimited self-paced command reps, weekly library scenarios, and saved replay history.',
+			cta: 'Start 7-day trial',
+			href: INDIVIDUAL_SIGNUP_HREF,
+			highlight: true
+		},
+		{
+			id: 'department',
+			label: 'Teams',
+			title: 'Department / team access',
+			price: 'From $799/yr',
+			description: 'Instructor-led sessions, shared scenarios, and member access for departments, academies, and training divisions.',
+			cta: 'Explore team access',
+			href: TEAM_ACCESS_HREF
+		},
+		{
+			id: 'training-company',
+			label: 'Commercial',
+			title: 'Training company access',
+			price: 'Custom',
+			description: 'Commercial use, client-facing training rights, and annual agreements built for training businesses.',
+			cta: 'Contact sales',
+			href: salesMail
+		}
+	];
+}
+
 export const proofPoints = [
-	'Pre-authored scenarios',
-	'Radio-based reps',
-	'Replay after every run'
+	'Ready-made fireground scenarios',
+	'Radio-first command reps',
+	'Replay review after every run'
 ] as const;
 
 export const valueProps: ValueProp[] = [
 	{
-		title: 'Build command confidence',
+		title: 'Build the command muscle',
 		description:
-			'Get repeatable reps running scenarios, making assignments, and staying organized under pressure.'
+			'Run scenarios again and again, make assignments out loud, and practice staying organized when the picture starts changing.'
 	},
 	{
-		title: 'Practice realistic radio communication',
+		title: 'Get better on the radio',
 		description:
-			'Train the communication side of command with radio traffic, updates, and assignments.'
+			'Work the communication side of command with radio traffic, progress updates, and assignments that need to be clear the first time.'
 	},
 	{
 		title: 'Prepare for promotion',
 		description:
-			'Sharpen the skills that matter before officer roles, acting positions, or promotional exams.'
+			'Sharpen the stuff that shows up in acting roles, officer interviews, assessment centers, and the first few minutes of a real incident.'
 	}
 ];
 
@@ -42,31 +220,31 @@ export const audienceChips = [
 	'Promotional prep',
 	'Acting officers',
 	'Company officers',
-	'Command confidence'
+	'Better radio traffic'
 ] as const;
 
 export const howItWorks: HowItWorksStep[] = [
 	{
 		step: '01',
-		title: 'Choose a scenario',
-		description: 'Start a pre-authored command scenario built for self-paced reps.'
+		title: 'Pick the run',
+		description: 'Start with a ready-made fireground scenario built for self-paced command practice.'
 	},
 	{
 		step: '02',
 		title: 'Work the incident',
-		description: 'Give radio traffic, assign units, and keep the command board organized.'
+		description: 'Give radio traffic, assign units, track conditions, and keep the command board from turning into soup.'
 	},
 	{
 		step: '03',
-		title: 'Review the run',
-		description: 'Replay the scenario and review transcripts, audio, and decisions afterward.'
+		title: 'Look it over',
+		description: 'Replay the scenario afterward with transcripts, audio, and decisions, then spot what to tighten up next time.'
 	}
 ];
 
 export const whyBullets = [
-	'Run self-paced command scenarios on your own schedule.',
-	'Practice radio traffic, assignments, and command board discipline.',
-	'Review each run and come back sharper on the next one.'
+	'Run command scenarios when your schedule actually allows it.',
+	'Practice radio traffic, assignments, size-up, and command board discipline.',
+	'Review each run and come back a little sharper on the next one.'
 ] as const;
 
 export const seoLinks: {

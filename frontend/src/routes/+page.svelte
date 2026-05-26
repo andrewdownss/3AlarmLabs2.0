@@ -14,11 +14,11 @@
 	import {
 		LandingHeader,
 		LandingHero,
-		LandingValueProps,
+		LandingFreeScenario,
 		LandingBuiltFor,
-		LandingHowItWorks,
-		LandingReviewSection,
-		LandingDepartments,
+		LandingBuiltWith,
+		LandingTestimonials,
+		LandingPricingPaths,
 		LandingClosingCta,
 		LandingFooter
 	} from '$lib/components/landing';
@@ -27,24 +27,24 @@
 	const canonicalUrl = toCanonicalUrl('/');
 	const faqItems = [
 		{
-			question: 'What is fire command training software?',
+			question: 'Can I try 3AlarmLabs before paying?',
 			answer:
-				'Fire command training software helps firefighters and officers practice incident size-up, radio communication, assignments, command tracking, and after-action review through repeatable scenarios.'
+				'Yes. You can run a free self-paced command scenario without creating an account. If you want to save the replay and keep training, you can create an account afterward.'
 		},
 		{
 			question: 'Can firefighters practice command scenarios alone?',
 			answer:
-				'Yes. 3AlarmLabs supports self-paced command scenarios so firefighters can build reps on shift, at home, or while preparing for promotion.'
+				'Yes. 3AlarmLabs is built for solo command practice, so firefighters can get reps on shift, at home, or while getting ready for promotion.'
 		},
 		{
 			question: 'Does 3AlarmLabs support department training?',
 			answer:
-				'Yes. Individual firefighters can train on their own, and department plans support instructor-led sessions, shared scenarios, and team access.'
+				'Yes. Individual members can train on their own, while department plans add instructor-led sessions, shared scenarios, and team access.'
 		},
 		{
 			question: 'How does replay review work?',
 			answer:
-				'After each run, firefighters can review the scenario, radio traffic, transcript, and decisions so they can identify what worked and what to improve next time.'
+				'After each run, you can review the scenario, radio traffic, transcript, and decisions. It makes the awkward stuff easier to spot, which is the point.'
 		}
 	];
 	const homepageJsonLd = [
@@ -79,16 +79,19 @@
 
 		<main>
 			<LandingHero {monthlyPrice} />
-			<LandingValueProps />
+			<LandingFreeScenario />
 			<LandingBuiltFor />
-			<LandingHowItWorks />
-			<LandingReviewSection />
-			<LandingDepartments />
+			<LandingBuiltWith />
+			<LandingTestimonials />
+			<LandingPricingPaths {monthlyPrice} />
 			<section class="py-16" aria-labelledby="homepage-faq-heading">
 				<div class="mx-auto max-w-3xl">
 					<p class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">FAQ</p>
-					<h2 id="homepage-faq-heading" class="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-						Fire command training questions
+					<h2
+						id="homepage-faq-heading"
+						class="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
+					>
+						Questions firefighters usually ask first
 					</h2>
 					<div class="mt-8 space-y-4">
 						{#each faqItems as item (item.question)}

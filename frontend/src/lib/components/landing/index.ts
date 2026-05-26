@@ -1,9 +1,9 @@
 export { default as LandingHeader } from './landing-header.svelte';
 export { default as LandingHero } from './landing-hero.svelte';
-export { default as LandingValueProps } from './landing-value-props.svelte';
+export { default as LandingFreeScenario } from './landing-free-scenario.svelte';
 export { default as LandingBuiltFor } from './landing-built-for.svelte';
-export { default as LandingHowItWorks } from './landing-how-it-works.svelte';
-export { default as LandingReviewSection } from './landing-review-section.svelte';
-export { default as LandingDepartments } from './landing-departments.svelte';
+export { default as LandingBuiltWith } from './landing-built-with.svelte';
+export { default as LandingTestimonials } from './landing-testimonials.svelte';
+export { default as LandingPricingPaths } from './landing-pricing-paths.svelte';
 export { default as LandingClosingCta } from './landing-closing-cta.svelte';
 export { default as LandingFooter } from './landing-footer.svelte';

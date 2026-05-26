@@ -2,7 +2,7 @@ export const siteOrigin = 'https://3alarmlabs.com';
 export const siteName = '3AlarmLabs';
 export const defaultSeoTitle = '3AlarmLabs | Fire Command Training Software';
 export const defaultSeoDescription =
-	'Self-paced fire command training software for firefighters and departments to practice incident command, radio communication, size-up, and after-action review.';
+	'Practice fire command online with realistic scenarios, push-to-talk radio, command board work, size-up, and after-action replay for firefighters and departments.';
 export const defaultOgImageUrl = 'https://hero.3alarmlabs.com/Ind-View.png';
 
 export function toCanonicalUrl(path = '/'): string {
