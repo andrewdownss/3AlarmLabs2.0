@@ -11,6 +11,7 @@
 		toJsonLd,
 		websiteJsonLd
 	} from '$lib/seo';
+	import { freeDemoRadioLimitShort } from '$lib/landing/landing-content';
 	import {
 		LandingHeader,
 		LandingHero,
@@ -28,8 +29,7 @@
 	const faqItems = [
 		{
 			question: 'Can I try 3AlarmLabs before paying?',
-			answer:
-				'Yes. You can run a free self-paced command scenario without creating an account. If you want to save the replay and keep training, you can create an account afterward.'
+			answer: `Yes. You can run a free self-paced command scenario without creating an account. Push-to-talk radio is included (${freeDemoRadioLimitShort}). Create an account to save your replay and unlock unlimited radio.`
 		},
 		{
 			question: 'Can firefighters practice command scenarios alone?',

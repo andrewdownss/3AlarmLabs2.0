@@ -40,6 +40,7 @@
 				>
 					{freeScenarioSection.cta}
 				</Button>
+				<p class="text-xs text-muted-foreground">{freeScenarioSection.radioNote}</p>
 				<p class="text-xs text-muted-foreground">No account required to get started.</p>
 			</div>
 		</div>

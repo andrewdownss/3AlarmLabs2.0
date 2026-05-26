@@ -22,6 +22,16 @@
 		formatUnitAssignmentLine
 	} from '$lib/trainer-command-board';
 	import { defaultOgImageUrl, toCanonicalUrl, toJsonLd } from '$lib/seo';
+	import {
+		INDIVIDUAL_SIGNUP_HREF,
+		SAVE_REPLAY_SIGNUP_HREF,
+		TEAM_ACCESS_HREF
+	} from '$lib/landing/landing-content';
+	import {
+		DEMO_MAX_CLIP_SECONDS,
+		DEMO_MAX_RADIO_SECONDS
+	} from '$lib/demo/constants';
+	import { saveDemoReplay } from '$lib/demo/replay-storage';
 	import MicIcon from '@lucide/svelte/icons/mic';
 	import type { PageData } from './$types';
 
@@ -64,10 +74,9 @@
 	type SideKey = 'alpha' | 'bravo' | 'charlie' | 'delta';
 
 	const monthlyPrice = PLANS.individual.monthlyPrice ?? 14.99;
-	const individualSignupHref = '/signup?next=%2Fapp%2Fstart-individual';
-	const pageTitle = 'Interactive Fire Command Demo | 3AlarmLabs';
+	const pageTitle = 'Free Fire Command Scenario | 3AlarmLabs';
 	const pageDescription =
-		'Preview the 3AlarmLabs self-paced Command interface in a low-resource demo mode with local timeline playback and disabled radio processing.';
+		'Run a free self-paced fire command scenario with radio traffic, unit assignments, changing conditions, and after-action review.';
 	const canonicalUrl = toCanonicalUrl('/demo');
 	const demoJsonLd = {
 		'@context': 'https://schema.org',
@@ -85,8 +94,8 @@
 	const demoJsonLdScript =
 		'<scr' + `ipt type="application/ld+json">${toJsonLd(demoJsonLd)}</scr` + 'ipt>';
 
-	const DEMO_PREVIEW_SECONDS = 120;
 	const FALLBACK_AVAILABLE_UNITS = ['E1', 'E2', 'T1', 'R1', 'BC1', 'MED1'];
+	const DEFAULT_SCENARIO_SECONDS = 20 * 60;
 
 	const stageLabels: Record<StageKey, string> = {
 		incipient: 'Incipient',
@@ -255,12 +264,10 @@
 
 	function scriptFromSelectedScenario(): DemoScriptEvent[] {
 		const timeline = data.demoScenario?.selfPacedConfigJson?.timeline ?? [];
-		if (timeline.length === 0)
-			return fallbackDemoScript.filter((event) => event.atSecond <= DEMO_PREVIEW_SECONDS);
+		if (timeline.length === 0) return fallbackDemoScript;
 
 		return [...timeline]
 			.sort((a, b) => a.offsetSeconds - b.offsetSeconds)
-			.filter((event) => Math.max(0, event.offsetSeconds ?? 0) <= DEMO_PREVIEW_SECONDS)
 			.map((event, index) => {
 				const dispatch = event.dispatch ?? {};
 				const stage = isStageKey(dispatch.stage) ? dispatch.stage : undefined;
@@ -297,7 +304,6 @@
 				typeof event.offsetSeconds === 'number' && Number.isFinite(event.offsetSeconds)
 					? Math.max(0, Math.floor(event.offsetSeconds))
 					: 0;
-			if (offsetSeconds > DEMO_PREVIEW_SECONDS) continue;
 			const existing = arrivals.find((arrival) => arrival.unitName === unitName);
 			if (existing && (existing.offsetSeconds ?? 0) <= offsetSeconds) continue;
 			const nextArrival = { unitName, status: 'available', offsetSeconds };
@@ -329,7 +335,8 @@
 	let firedScriptEventIds = $state<string[]>([]);
 	let dispatchSheetOpen = $state(false);
 	let editSheetOpen = $state(false);
-	let premiumSheetOpen = $state(false);
+	let sessionEnded = $state(false);
+	let sessionStartedAt = $state<string | null>(null);
 	let dispatchUnitName = $state('');
 	let dispatchDivision = $state('Div 1');
 	let dispatchAssignment = $state('');
@@ -342,10 +349,26 @@
 		{
 			id: 'intro',
 			type: 'INFO',
-			text: 'Press Start Demo to watch the first two minutes of the self-paced run.',
+			text: 'Press Start Scenario to begin the free self-paced command simulation.',
 			time: '00:00'
 		}
 	]);
+
+	let isRecording = $state(false);
+	let isArmingMic = $state(false);
+	let isProcessing = $state(false);
+	let radioError = $state<string | null>(null);
+	let lastTranscript = $state('');
+	let radioSecondsUsed = $state(0);
+	let clipStartedAt = $state<number | null>(null);
+	let clipLimitTimer: ReturnType<typeof setTimeout> | null = null;
+
+	let mediaRecorder: MediaRecorder | null = null;
+	let activeStream: MediaStream | null = null;
+	let audioChunks: Blob[] = [];
+	let pttHeld = false;
+	let pttDestroyed = false;
+	const PTT_TIMESLICE_MS = 250;
 
 	let clockInterval: ReturnType<typeof setInterval> | null = null;
 	let timelineScrollEls: HTMLDivElement[] = [];
@@ -354,7 +377,20 @@
 	let viewportInnerHeight = $state(0);
 	let teardownViewportResize: (() => void) | null = null;
 	const activeDemoScript = $derived(scriptFromSelectedScenario());
-	const demoDurationSeconds = DEMO_PREVIEW_SECONDS;
+	const scenarioTimeLimitSeconds = $derived.by(() => {
+		const limit = data.demoScenario?.selfPacedConfigJson?.timeLimitSeconds;
+		if (typeof limit === 'number' && limit > 0) return limit;
+		const lastEvent = activeDemoScript.at(-1);
+		if (lastEvent && lastEvent.atSecond > 0) {
+			return Math.max(lastEvent.atSecond + 300, DEFAULT_SCENARIO_SECONDS);
+		}
+		return DEFAULT_SCENARIO_SECONDS;
+	});
+	const timeLimitLabel = $derived(formatClock(scenarioTimeLimitSeconds));
+	const radioRemainingSeconds = $derived(
+		Math.max(0, DEMO_MAX_RADIO_SECONDS - radioSecondsUsed)
+	);
+	const radioLimitReached = $derived(radioRemainingSeconds <= 0);
 	const visibleScenarioResources = $derived(scriptedArrivalResources());
 	const hasPendingScriptedArrivals = $derived(
 		visibleScenarioResources.some(
@@ -366,7 +402,7 @@
 	const scenarioTitle = $derived(data.demoScenario?.title ?? 'Residential Working Fire (Demo)');
 	const scenarioDescription = $derived(
 		data.demoScenario?.description ??
-			'Local-only two-minute playback of the self-paced Command interface.'
+			'Free self-paced command scenario with radio, assignments, and after-action review.'
 	);
 	const currentSideImage = $derived.by(() => {
 		const scenario = data.demoScenario;
@@ -388,7 +424,14 @@
 						: event.type === timelineFilter
 				)
 	);
-	const previewComplete = $derived(hasStarted && sessionSeconds >= demoDurationSeconds && isPaused);
+	const sessionComplete = $derived(
+		sessionEnded ||
+			(hasStarted &&
+				!sessionEnded &&
+				scenarioTimeLimitSeconds > 0 &&
+				sessionSeconds >= scenarioTimeLimitSeconds &&
+				isPaused)
+	);
 
 	type StageOverlays = Record<string, AnimationOverlay[]>;
 	type SideStageOverlays = Record<string, StageOverlays>;
@@ -527,18 +570,260 @@
 	function startClock(): void {
 		if (clockInterval !== null) return;
 		clockInterval = setInterval(() => {
+			if (sessionEnded) return;
 			sessionSeconds += 1;
 			runDueScriptEvents();
-			if (sessionSeconds >= demoDurationSeconds) {
-				stopClock();
-				isPaused = true;
-				addTimelineEvent(
-					'END',
-					'Two-minute preview complete. Create an account to run the full simulation.',
-					demoDurationSeconds
-				);
+			if (scenarioTimeLimitSeconds > 0 && sessionSeconds >= scenarioTimeLimitSeconds) {
+				handleEndSession('timeout');
 			}
 		}, 1000);
+	}
+
+	function pickAudioMimeType(): string | undefined {
+		if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return undefined;
+		for (const t of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']) {
+			if (MediaRecorder.isTypeSupported(t)) return t;
+		}
+		return undefined;
+	}
+
+	function stopMediaTracks(): void {
+		if (activeStream) {
+			for (const track of activeStream.getTracks()) track.stop();
+			activeStream = null;
+		}
+	}
+
+	function clearClipLimitTimer(): void {
+		if (clipLimitTimer !== null) {
+			clearTimeout(clipLimitTimer);
+			clipLimitTimer = null;
+		}
+	}
+
+	function applyRadioActions(
+		actions: Array<{
+			unitName: string;
+			division: string;
+			assignment: string;
+			status: string;
+		}>
+	): void {
+		for (const action of actions) {
+			const entry: DemoBoardEntry = {
+				id: `radio-${action.unitName}-${action.division}`,
+				division: action.division,
+				unitName: action.unitName,
+				assignment: action.assignment,
+				status: action.status
+			};
+			boardEntries = [
+				...boardEntries.filter((existing) => existing.unitName !== action.unitName),
+				entry
+			];
+			availableUnits = availableUnits.filter((unit) => unit !== action.unitName);
+		}
+	}
+
+	async function sendDemoRadio(blob: Blob, mimeType: string, clipSeconds: number): Promise<void> {
+		const fd = new FormData();
+		const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
+		fd.set('audio', blob, `demo-radio.${ext}`);
+
+		const resp = await fetch('/api/demo/radio', {
+			method: 'POST',
+			body: fd,
+			credentials: 'include'
+		});
+
+		let result: {
+			error?: string;
+			transcript?: string;
+			actions?: Array<{
+				unitName: string;
+				division: string;
+				assignment: string;
+				status: string;
+			}>;
+			sizeUpText?: string | null;
+		} = {};
+		try {
+			result = await resp.json();
+		} catch {
+			radioError = 'Server returned an invalid response.';
+			return;
+		}
+
+		if (!resp.ok) {
+			radioError = typeof result.error === 'string' ? result.error : `Radio request failed (${resp.status})`;
+			return;
+		}
+
+		radioSecondsUsed += clipSeconds;
+		const transcript = result.transcript?.trim() ?? '';
+		if (transcript) {
+			lastTranscript = transcript;
+			addTimelineEvent('RADIO', transcript);
+		}
+		if (result.sizeUpText) {
+			addTimelineEvent('SIZE-UP', result.sizeUpText);
+		}
+		if (result.actions && result.actions.length > 0) {
+			applyRadioActions(result.actions);
+		}
+	}
+
+	async function startRecording(): Promise<void> {
+		radioError = null;
+		if (!hasStarted || sessionEnded || isProcessing || isArmingMic || radioLimitReached) return;
+		if (mediaRecorder?.state === 'recording') return;
+
+		pttHeld = true;
+		isArmingMic = true;
+
+		try {
+			if (!navigator.mediaDevices?.getUserMedia) {
+				radioError = 'Microphone is not supported in this browser.';
+				return;
+			}
+
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			if (!pttHeld || pttDestroyed) {
+				for (const track of stream.getTracks()) track.stop();
+				return;
+			}
+
+			activeStream = stream;
+			const mimeType = pickAudioMimeType();
+			mediaRecorder = mimeType
+				? new MediaRecorder(stream, { mimeType })
+				: new MediaRecorder(stream);
+			const recordedType =
+				mediaRecorder.mimeType && mediaRecorder.mimeType !== ''
+					? mediaRecorder.mimeType
+					: mimeType ?? 'audio/webm';
+			audioChunks = [];
+			clipStartedAt = Date.now();
+
+			mediaRecorder.ondataavailable = (event) => {
+				if (event.data.size > 0) audioChunks.push(event.data);
+			};
+
+			mediaRecorder.onstop = async () => {
+				clearClipLimitTimer();
+				stopMediaTracks();
+				mediaRecorder = null;
+				const startedAt = clipStartedAt;
+				clipStartedAt = null;
+
+				const blob = new Blob(audioChunks, { type: recordedType });
+				audioChunks = [];
+				if (blob.size === 0 || !startedAt) {
+					isRecording = false;
+					return;
+				}
+
+				const clipSeconds = Math.min(
+					DEMO_MAX_CLIP_SECONDS,
+					Math.max(1, Math.ceil((Date.now() - startedAt) / 1000))
+				);
+				if (radioSecondsUsed + clipSeconds > DEMO_MAX_RADIO_SECONDS) {
+					radioError = `Free demo radio limit reached (${DEMO_MAX_RADIO_SECONDS}s total). Create an account for unlimited radio.`;
+					isRecording = false;
+					return;
+				}
+
+				isProcessing = true;
+				try {
+					await sendDemoRadio(blob, recordedType, clipSeconds);
+				} catch (err) {
+					console.error('Demo radio failed:', err);
+					radioError = err instanceof Error ? err.message : 'Could not send radio audio.';
+				} finally {
+					isProcessing = false;
+					isRecording = false;
+				}
+			};
+
+			const remainingClipSeconds = Math.min(
+				DEMO_MAX_CLIP_SECONDS,
+				radioRemainingSeconds
+			);
+			clipLimitTimer = setTimeout(() => {
+				if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+			}, remainingClipSeconds * 1000);
+
+			mediaRecorder.start(PTT_TIMESLICE_MS);
+			isRecording = true;
+		} catch (err) {
+			console.error('Microphone error:', err);
+			const name = err instanceof Error ? err.name : '';
+			if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+				radioError = 'Microphone access denied. Allow the mic in your browser settings.';
+			} else if (name === 'NotFoundError') {
+				radioError = 'No microphone found.';
+			} else {
+				radioError = err instanceof Error ? err.message : 'Could not access microphone.';
+			}
+			stopMediaTracks();
+			mediaRecorder = null;
+		} finally {
+			isArmingMic = false;
+			if (!mediaRecorder || mediaRecorder.state !== 'recording') isRecording = false;
+		}
+	}
+
+	function stopRecording(): void {
+		pttHeld = false;
+		isRecording = false;
+		clearClipLimitTimer();
+		if (mediaRecorder && mediaRecorder.state === 'recording') {
+			mediaRecorder.stop();
+		}
+	}
+
+	function onPttPointerDown(event: PointerEvent): void {
+		event.preventDefault();
+		void startRecording();
+	}
+
+	function onPttPointerUp(event: PointerEvent): void {
+		event.preventDefault();
+		stopRecording();
+	}
+
+	function persistReplay(): void {
+		saveDemoReplay({
+			version: 1,
+			scenarioTitle: scenarioTitle,
+			scenarioId: data.demoScenario?.id ?? null,
+			startedAt: sessionStartedAt ?? new Date().toISOString(),
+			endedAt: new Date().toISOString(),
+			durationSeconds: sessionSeconds,
+			events: timelineEvents.map((event) => ({
+				id: event.id,
+				type: event.type,
+				text: event.text,
+				time: event.time,
+				atSecond: sessionSeconds
+			})),
+			boardEntries: boardEntries.map((entry) => ({ ...entry })),
+			radioSecondsUsed
+		});
+	}
+
+	function handleEndSession(reason: 'user' | 'timeout' = 'user'): void {
+		if (sessionEnded) return;
+		sessionEnded = true;
+		stopClock();
+		isPaused = true;
+		stopRecording();
+		const message =
+			reason === 'timeout'
+				? 'Scenario time limit reached. Review your run or create an account to save replay.'
+				: 'Scenario ended. Review your run or create an account to save replay.';
+		addTimelineEvent('END', message);
+		persistReplay();
 	}
 
 	function applyScriptEvent(event: DemoScriptEvent): void {
@@ -580,8 +865,11 @@
 
 	function resetDemoState(): void {
 		stopClock();
+		stopRecording();
 		hasStarted = false;
 		isPaused = false;
+		sessionEnded = false;
+		sessionStartedAt = null;
 		sessionSeconds = 0;
 		currentStage = 'incipient';
 		currentSide = 'alpha';
@@ -590,7 +878,6 @@
 		firedScriptEventIds = [];
 		dispatchSheetOpen = false;
 		editSheetOpen = false;
-		premiumSheetOpen = false;
 		dispatchUnitName = '';
 		dispatchDivision = 'Div 1';
 		dispatchAssignment = '';
@@ -599,11 +886,15 @@
 		editAssignment = '';
 		editStatus = '';
 		timelineFilter = 'all';
+		radioError = null;
+		lastTranscript = '';
+		radioSecondsUsed = 0;
+		isProcessing = false;
 		timelineEvents = [
 			{
 				id: 'intro',
 				type: 'INFO',
-				text: 'Press Start Demo to watch the first two minutes of the self-paced run.',
+				text: 'Press Start Scenario to begin the free self-paced command simulation.',
 				time: '00:00'
 			}
 		];
@@ -613,7 +904,8 @@
 		if (hasStarted) return;
 		hasStarted = true;
 		isPaused = false;
-		addTimelineEvent('START', 'Simulation started. Preview is running locally for two minutes.');
+		sessionStartedAt = new Date().toISOString();
+		addTimelineEvent('START', 'Free scenario started. Hold the mic to talk on the radio.');
 		runDueScriptEvents();
 		startClock();
 	}
@@ -737,6 +1029,14 @@
 
 	onDestroy(() => {
 		stopClock();
+		pttDestroyed = true;
+		pttHeld = false;
+		clearClipLimitTimer();
+		if (mediaRecorder?.state === 'recording') {
+			mediaRecorder.stop();
+		} else {
+			stopMediaTracks();
+		}
 		if (teardownViewportResize) teardownViewportResize();
 	});
 
@@ -750,7 +1050,6 @@
 			teardownViewportResize = () => window.removeEventListener('resize', onResize);
 		}
 		void warmScenarioMedia();
-		handleStartDemo();
 	});
 </script>
 
@@ -781,17 +1080,18 @@
 			<div class="mx-auto max-w-7xl">
 				<header class="max-w-3xl">
 					<p class="text-sm font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-						Two-minute command preview
+						Free command scenario
 					</p>
 					<h1
 						class="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:mt-4 sm:text-5xl"
 					>
-						Watch the first two minutes of the real self-paced simulation.
+						Run a real self-paced command simulation — free
 					</h1>
 					<p class="mt-4 text-sm leading-6 text-muted-foreground sm:mt-5 sm:text-lg sm:leading-7">
-						This page plays the selected authored simulation locally through 02:00. It shows the
-						Command board and scenario timeline without creating a session, saving activity, or
-						enabling radio processing.
+						Work the incident with radio traffic, unit assignments, changing conditions, and
+						after-action review. No account required to start. Push-to-talk radio is included
+						({DEMO_MAX_CLIP_SECONDS}s max per transmission, {DEMO_MAX_RADIO_SECONDS}s total in the
+						free demo).
 					</p>
 				</header>
 
@@ -803,25 +1103,35 @@
 								<p class="mt-1 line-clamp-2 text-sm text-muted-foreground">{scenarioDescription}</p>
 							</div>
 							<div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-								<Badge class="bg-green-500 text-white">{isPaused ? 'PAUSED' : 'LIVE'}</Badge>
+								<Badge class={sessionEnded ? 'bg-muted text-foreground' : 'bg-green-500 text-white'}>
+									{sessionEnded ? 'ENDED' : isPaused ? 'PAUSED' : 'LIVE'}
+								</Badge>
 								<Badge variant="outline">{stageLabels[currentStage]}</Badge>
 								<Badge variant="outline">{sideLabels[currentSide]}</Badge>
 								<span class="font-mono text-sm text-muted-foreground"
-									>{formatClock(sessionSeconds)} / 02:00</span
+									>{formatClock(sessionSeconds)} / {timeLimitLabel}</span
 								>
 							</div>
 						</div>
-						<div class="mt-4 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+						<div class="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
 							<Button class="min-h-11 px-2" disabled={hasStarted} onclick={handleStartDemo}>
 								Start Scenario
 							</Button>
 							<Button
 								class="min-h-11 px-2"
 								variant="outline"
-								disabled={!hasStarted}
+								disabled={!hasStarted || sessionEnded}
 								onclick={handlePauseResume}
 							>
 								{isPaused ? 'Resume' : 'Pause'}
+							</Button>
+							<Button
+								class="min-h-11 px-2"
+								variant="outline"
+								disabled={!hasStarted || sessionEnded}
+								onclick={() => handleEndSession('user')}
+							>
+								End Session
 							</Button>
 							<Button class="min-h-11 px-2" variant="outline" onclick={handleResetDemo}
 								>Reset</Button
@@ -904,24 +1214,24 @@
 												{sideLabels[currentSide]}
 											</span>
 										</div>
-										{#if previewComplete}
+										{#if sessionComplete}
 											<div
 												class="absolute inset-0 z-30 flex items-center justify-center bg-black/55 p-4"
 											>
 												<div
 													class="max-w-sm rounded-xl border border-white/20 bg-background p-4 text-center shadow-xl sm:p-5"
 												>
-													<h3 class="text-lg font-semibold">Two-minute preview complete</h3>
+													<h3 class="text-lg font-semibold">Scenario complete</h3>
 													<p class="mt-2 text-sm text-muted-foreground">
-														Create an account to run the full self-paced simulation with radio
-														dispatch and after-action review.
+														Create an account to save your replay, unlock unlimited radio, and access
+														the full scenario library.
 													</p>
 													<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-														<Button class="min-h-11" href={individualSignupHref}
-															>Start 7-day trial</Button
+														<Button class="min-h-11" href={SAVE_REPLAY_SIGNUP_HREF}
+															>Create account & save replay</Button
 														>
-														<Button class="min-h-11" variant="outline" href="/pricing"
-															>See pricing</Button
+														<Button class="min-h-11" variant="outline" href={INDIVIDUAL_SIGNUP_HREF}
+															>Start 7-day trial</Button
 														>
 													</div>
 												</div>
@@ -957,8 +1267,8 @@
 										</p>
 									{/if}
 									<p class="text-xs text-muted-foreground">
-										Tap a unit to manually assign a division and assignment. Radio dispatch is shown
-										below as a premium feature.
+										Tap a unit to manually assign a division and assignment, or use push-to-talk
+										radio below.
 									</p>
 								</div>
 							</div>
@@ -1135,27 +1445,45 @@
 									<div class="flex shrink-0 flex-col items-center">
 										<button
 											type="button"
-											onclick={() => (premiumSheetOpen = true)}
-											aria-disabled="true"
-											class="relative flex h-16 w-16 touch-none items-center justify-center rounded-full border-4 border-red-300 bg-red-500/80 text-white transition-all hover:bg-red-500"
-											aria-label="Push to talk is a premium feature"
+											onpointerdown={onPttPointerDown}
+											onpointerup={onPttPointerUp}
+											onpointercancel={onPttPointerUp}
+											onlostpointercapture={onPttPointerUp}
+											disabled={!hasStarted || sessionEnded || isProcessing || radioLimitReached}
+											class="relative flex h-16 w-16 touch-none items-center justify-center rounded-full border-4 transition-all select-none disabled:cursor-not-allowed disabled:opacity-50 {isRecording
+												? 'scale-110 border-red-500 bg-red-500'
+												: 'border-red-300 bg-red-500/80 hover:bg-red-500'}"
+											aria-label="Push to talk"
+											aria-pressed={isRecording}
 										>
-											<MicIcon class="h-6 w-6" />
-											<span
-												class="absolute -top-2 -right-5 rounded-full border bg-background px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-sm"
-											>
-												Premium
-											</span>
+											<MicIcon class="h-6 w-6 text-white" />
 										</button>
 									</div>
 									<div class="min-w-0">
 										<p class="text-xs font-medium text-foreground">
-											Radio is available in the full session.
+											{radioLimitReached
+												? 'Free demo radio limit reached.'
+												: `${radioRemainingSeconds}s radio remaining (${DEMO_MAX_CLIP_SECONDS}s max per clip).`}
 										</p>
 										<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-											This preview shows the control without requesting microphone access or
-											processing audio.
+											{isArmingMic
+												? 'Starting mic…'
+												: isRecording
+													? 'Recording…'
+													: isProcessing
+														? 'Processing…'
+														: hasStarted
+															? 'Hold to talk on the radio.'
+															: 'Start the scenario to use radio.'}
 										</p>
+										{#if radioError}
+											<p class="mt-2 text-[11px] text-destructive" role="alert">{radioError}</p>
+										{/if}
+										{#if lastTranscript}
+											<p class="mt-2 rounded-md border bg-muted/50 p-2 text-[11px] text-muted-foreground">
+												"{lastTranscript}"
+											</p>
+										{/if}
 									</div>
 								</div>
 							</div>
@@ -1168,25 +1496,32 @@
 				>
 					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div class="max-w-xl">
-							<h2 class="text-2xl font-semibold tracking-tight">Want full access?</h2>
+							<h2 class="text-2xl font-semibold tracking-tight">Save your replay and keep training</h2>
 							<p class="mt-2 text-sm leading-6 text-primary-foreground/85">
-								Create an account to run full self-paced sessions with radio capture, AI parsing,
-								and after-action review.
+								Create an account to save this run, unlock unlimited radio, and access weekly library
+								scenarios. Departments and training companies can request team access.
 							</p>
 						</div>
 						<div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
 							<Button
 								class="w-full rounded-none bg-card text-foreground hover:bg-muted sm:w-auto"
-								href={individualSignupHref}
+								href={SAVE_REPLAY_SIGNUP_HREF}
+							>
+								Create account & save replay
+							</Button>
+							<Button
+								variant="outline"
+								class="w-full rounded-none border-primary-foreground/60 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground sm:w-auto"
+								href={INDIVIDUAL_SIGNUP_HREF}
 							>
 								Start 7-day trial
 							</Button>
 							<Button
 								variant="outline"
 								class="w-full rounded-none border-primary-foreground/60 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground sm:w-auto"
-								href="/pricing"
+								href={TEAM_ACCESS_HREF}
 							>
-								See pricing
+								Explore team access
 							</Button>
 						</div>
 					</div>
@@ -1327,35 +1662,6 @@
 					</Button>
 					<Button variant="outline" size="sm" class="min-h-10" onclick={closeEdit}>Cancel</Button>
 					<Button size="sm" class="min-h-10" onclick={saveEdit}>Save</Button>
-				</Sheet.Footer>
-			</Sheet.Content>
-		</Sheet.Root>
-
-		<Sheet.Root bind:open={premiumSheetOpen}>
-			<Sheet.Content
-				side="bottom"
-				class="max-h-[90dvh] overflow-y-auto rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]"
-			>
-				<Sheet.Header class="text-left">
-					<Sheet.Title class="text-base">Radio dispatch is premium</Sheet.Title>
-					<Sheet.Description class="text-xs">
-						Create an account to use AI-parsed radio commands in the full self-paced session.
-					</Sheet.Description>
-				</Sheet.Header>
-				<div class="px-4 text-sm text-muted-foreground">
-					The demo keeps microphone access off, but shows where push-to-talk lives in the live
-					simulation.
-				</div>
-				<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pt-0 pb-2">
-					<Button
-						variant="outline"
-						size="sm"
-						class="min-h-10"
-						onclick={() => (premiumSheetOpen = false)}
-					>
-						Keep previewing
-					</Button>
-					<Button size="sm" class="min-h-10" href={individualSignupHref}>Start 7-day trial</Button>
 				</Sheet.Footer>
 			</Sheet.Content>
 		</Sheet.Root>

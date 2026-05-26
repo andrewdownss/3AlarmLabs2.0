@@ -1,3 +1,9 @@
+import { DEMO_MAX_CLIP_SECONDS, DEMO_MAX_RADIO_SECONDS } from '$lib/demo/constants';
+
+/** Shared free-demo radio limit copy — keep pricing, hero, and free scenario in sync */
+export const freeDemoRadioLimitShort = `${DEMO_MAX_CLIP_SECONDS}s max per radio transmission`;
+export const freeDemoRadioLimitDetail = `${DEMO_MAX_CLIP_SECONDS}s max per transmission, ${DEMO_MAX_RADIO_SECONDS}s total per run`;
+
 export interface ValueProp {
 	title: string;
 	description: string;
@@ -61,15 +67,15 @@ export const heroSupportLine =
 export const freeScenarioSection = {
 	eyebrow: 'Free scenario',
 	title: 'Take the seat for a working fire. No account needed.',
-	description:
-		'Start with a residential working fire and see how it feels. Give assignments, manage the board, use push-to-talk radio, and review the run afterward. Quick, practical, and a little unforgiving in the right ways.',
+	description: `Start with a residential working fire and see how it feels. Give assignments, manage the board, use push-to-talk radio (${freeDemoRadioLimitShort}), and review the run afterward.`,
 	bullets: [
 		'A complete self-paced command scenario',
-		'Push-to-talk radio that understands your assignments',
+		`Push-to-talk radio with AI parsing (${freeDemoRadioLimitShort})`,
 		'A command board that keeps changing as the call develops',
 		'Replay review when the run is over'
 	],
-	cta: 'Run the free scenario'
+	cta: 'Run the free scenario',
+	radioNote: `Push-to-talk radio included. ${freeDemoRadioLimitDetail} in the free demo.`
 };
 
 export const builtForEveryLevel: AudienceCard[] = [
@@ -157,7 +163,7 @@ export function pricingPaths(monthlyPrice: number): PricingPath[] {
 			label: 'Try first',
 			title: 'Free scenario',
 			price: '$0',
-			description: 'Run one self-paced command scenario with limited radio. No account required, no weird hoops.',
+			description: `Run one self-paced command scenario with push-to-talk radio (${freeDemoRadioLimitShort}), command board tracking, and replay review. No account required.`,
 			cta: 'Try the free scenario',
 			href: DEMO_HREF
 		},
