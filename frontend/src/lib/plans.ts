@@ -28,6 +28,8 @@ export interface PlanConfig {
 	bestFor: string;
 	/** Instructor-led command sessions (join codes, student role) */
 	canInstructorLedCommand: boolean;
+	canHostClassroom: boolean;
+	maxClassroomSeats: number;
 	monthlyPrice: number | null;
 	annualPrice: number | null;
 }
@@ -49,6 +51,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 		limitsSummary: 'No billing on file yet. Subscribe to unlock training.',
 		bestFor: 'Restarting access',
 		canInstructorLedCommand: false,
+		canHostClassroom: false,
+		maxClassroomSeats: 0,
 		monthlyPrice: null,
 		annualPrice: null
 	},
@@ -69,6 +73,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 			'1 user, unlimited SizeUp scenes, unlimited self-paced Command, and weekly library scenarios.',
 		bestFor: 'Promote your career with self-paced command training',
 		canInstructorLedCommand: false,
+		canHostClassroom: false,
+		maxClassroomSeats: 0,
 		monthlyPrice: 14.99,
 		annualPrice: null
 	},
@@ -89,6 +95,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 			'Up to 10 members, 1 instructor/admin, 10 active Command scenarios, instructor-led + self-paced.',
 		bestFor: 'Small volunteer or single-station departments',
 		canInstructorLedCommand: true,
+		canHostClassroom: false,
+		maxClassroomSeats: 0,
 		monthlyPrice: null,
 		annualPrice: 799
 	},
@@ -109,6 +117,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 			'Up to 30 members, 3 instructors/admins, 25 active Command scenarios, shared org workspace.',
 		bestFor: 'Combo/career companies and multi-company departments',
 		canInstructorLedCommand: true,
+		canHostClassroom: true,
+		maxClassroomSeats: 30,
 		monthlyPrice: null,
 		annualPrice: 1499
 	},
@@ -129,6 +139,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 			'Up to 100 members, 10 instructors/admins, unlimited active Command scenarios, advanced reporting.',
 		bestFor: 'Larger departments, academies, training divisions',
 		canInstructorLedCommand: true,
+		canHostClassroom: true,
+		maxClassroomSeats: 100,
 		monthlyPrice: null,
 		annualPrice: 3999
 	},
@@ -149,6 +161,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 			'Commercial use allowed, up to 5 instructors, up to 50 trainees/year (included), client-facing training rights.',
 		bestFor: 'Private training businesses',
 		canInstructorLedCommand: true,
+		canHostClassroom: true,
+		maxClassroomSeats: 100,
 		monthlyPrice: null,
 		annualPrice: null
 	}
@@ -187,8 +201,18 @@ export function canInviteUser(plan: PlanConfig, currentMemberCount: number): boo
 
 export function canStartCommandMode(
 	plan: PlanConfig,
-	mode: 'self_practice' | 'instructor_led'
+	mode: 'self_practice' | 'instructor_led' | 'classroom'
 ): boolean {
 	if (mode === 'self_practice') return true;
+	if (mode === 'classroom') return canHostClassroom(plan);
 	return plan.canInstructorLedCommand;
+}
+
+export function canHostClassroom(plan: PlanConfig): boolean {
+	return plan.canHostClassroom && plan.maxClassroomSeats > 0;
+}
+
+export function withinClassroomSeatLimit(plan: PlanConfig, currentParticipantCount: number): boolean {
+	if (!canHostClassroom(plan)) return false;
+	return currentParticipantCount < plan.maxClassroomSeats;
 }

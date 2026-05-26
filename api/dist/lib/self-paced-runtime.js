@@ -6,7 +6,7 @@
  */
 import { and, asc, eq, isNull, lte } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { trainerCommandBoardEntries, trainerScenarios, trainerScheduledEvents, trainerSessionEvents, trainerSessions, } from "../db/schema/trainer.js";
+import { classrooms, trainerCommandBoardEntries, trainerScenarios, trainerScheduledEvents, trainerSessionEvents, trainerSessions, } from "../db/schema/trainer.js";
 import { formatDispatchUpdateWithUnit, matchesAssignment, parseSelfPacedConfig, simulationElapsedMs, } from "./self-paced.js";
 import { applyStateDispatch } from "./state-dispatch.js";
 async function loadSession(sessionId) {
@@ -321,7 +321,10 @@ function assignmentCompletionKey(ruleId, hit) {
  */
 export async function endSession(io, sessionId, opts) {
     const [row] = await db
-        .select({ endedAt: trainerSessions.endedAt })
+        .select({
+        endedAt: trainerSessions.endedAt,
+        classroomId: trainerSessions.classroomId,
+    })
         .from(trainerSessions)
         .where(eq(trainerSessions.id, sessionId))
         .limit(1);
@@ -353,5 +356,15 @@ export async function endSession(io, sessionId, opts) {
         outcome: opts.outcome,
         reason: opts.reason,
     });
+    if (row.classroomId) {
+        await db
+            .update(classrooms)
+            .set({ activeSessionId: null, calledOnParticipantId: null })
+            .where(eq(classrooms.id, row.classroomId));
+        io.to(`classroom:${row.classroomId}`).emit("classroom:scenario-ended", {
+            outcome: opts.outcome,
+            reason: opts.reason,
+        });
+    }
 }
 //# sourceMappingURL=self-paced-runtime.js.map

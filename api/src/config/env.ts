@@ -9,6 +9,7 @@ const envSchema = z.object({
 	TRAINER_DATABASE_URL: z.string().optional(),
 	DATABASE_URL: z.string().optional(),
 	REDIS_URL: z.string().default('redis://localhost:6379'),
+	BETTER_AUTH_SECRET: z.string().optional(),
 	OPENAI_API_KEY: z.string().optional(),
 	UPLOADTHING_TOKEN: z.string().optional(),
 	CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost'),

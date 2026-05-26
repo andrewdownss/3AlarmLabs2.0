@@ -4,6 +4,7 @@ export declare const env: {
     REDIS_URL: string;
     CORS_ORIGIN: string;
     DATABASE_URL?: string | undefined;
+    BETTER_AUTH_SECRET?: string | undefined;
     OPENAI_API_KEY?: string | undefined;
     UPLOADTHING_TOKEN?: string | undefined;
     DATABASE_POOL_MAX?: string | undefined;

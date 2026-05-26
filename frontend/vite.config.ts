@@ -20,6 +20,12 @@ export default defineConfig({
 			},
 			'/api/trainer': {
 				target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000'
+			},
+			'/api/classroom': {
+				target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000'
+			},
+			'/api/demo': {
+				target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000'
 			}
 		}
 	}

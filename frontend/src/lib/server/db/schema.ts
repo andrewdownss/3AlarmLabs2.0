@@ -253,7 +253,8 @@ export const scenes = pgTable(
 
 export const trainerSessionModeEnum = pgEnum('trainer_session_mode', [
 	'instructor_led',
-	'self_practice'
+	'self_practice',
+	'classroom'
 ]);
 
 export const trainerScenarios = pgTable(
@@ -305,6 +306,50 @@ export const trainerScenarios = pgTable(
 	]
 );
 
+export const classrooms = pgTable(
+	'classrooms',
+	{
+		id: text('id').primaryKey(),
+		organizationId: text('organization_id').references(() => organizations.id, {
+			onDelete: 'set null'
+		}),
+		instructorId: text('instructor_id').references(() => user.id, { onDelete: 'set null' }),
+		name: text('name').notNull(),
+		code: text('code').notNull().unique(),
+		maxSeats: integer('max_seats').notNull().default(100),
+		activeSessionId: text('active_session_id'),
+		calledOnParticipantId: text('called_on_participant_id'),
+		createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+		endedAt: timestamp('ended_at', { withTimezone: true, mode: 'date' })
+	},
+	(table) => [
+		index('classrooms_org_id_idx').on(table.organizationId),
+		index('classrooms_instructor_id_idx').on(table.instructorId),
+		uniqueIndex('classrooms_code_idx').on(table.code)
+	]
+);
+
+export const classroomParticipants = pgTable(
+	'classroom_participants',
+	{
+		id: text('id').primaryKey(),
+		classroomId: text('classroom_id')
+			.notNull()
+			.references(() => classrooms.id, { onDelete: 'cascade' }),
+		displayName: text('display_name').notNull(),
+		userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+		joinedAt: timestamp('joined_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+		lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'date' })
+			.defaultNow()
+			.notNull(),
+		kickedAt: timestamp('kicked_at', { withTimezone: true, mode: 'date' })
+	},
+	(table) => [
+		index('classroom_participants_classroom_idx').on(table.classroomId),
+		index('classroom_participants_presence_idx').on(table.classroomId, table.lastSeenAt)
+	]
+);
+
 export const trainerSessions = pgTable(
 	'trainer_sessions',
 	{
@@ -317,11 +362,15 @@ export const trainerSessions = pgTable(
 		organizationId: text('organization_id').references(() => organizations.id, {
 			onDelete: 'set null'
 		}),
+		classroomId: text('classroom_id').references(() => classrooms.id, {
+			onDelete: 'set null'
+		}),
 		instructorId: text('instructor_id').references(() => user.id, { onDelete: 'set null' }),
 		studentId: text('student_id').references(() => user.id, { onDelete: 'cascade' }),
 		activeStage: text('active_stage').notNull().default('incipient'),
 		activeSide: text('active_side').notNull().default('alpha'),
 		hasStarted: boolean('has_started').notNull().default(false),
+		reviewVisible: boolean('review_visible').notNull().default(true),
 		startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 		endedAt: timestamp('ended_at', { withTimezone: true, mode: 'date' }),
 		pausedAt: timestamp('paused_at', { withTimezone: true, mode: 'date' }),
@@ -477,6 +526,31 @@ export const trainerScenariosRelations = relations(trainerScenarios, ({ one, man
 	sessions: many(trainerSessions)
 }));
 
+export const classroomsRelations = relations(classrooms, ({ one, many }) => ({
+	organization: one(organizations, {
+		fields: [classrooms.organizationId],
+		references: [organizations.id]
+	}),
+	instructor: one(user, { fields: [classrooms.instructorId], references: [user.id] }),
+	activeSession: one(trainerSessions, {
+		fields: [classrooms.activeSessionId],
+		references: [trainerSessions.id]
+	}),
+	calledOnParticipant: one(classroomParticipants, {
+		fields: [classrooms.calledOnParticipantId],
+		references: [classroomParticipants.id]
+	}),
+	participants: many(classroomParticipants)
+}));
+
+export const classroomParticipantsRelations = relations(classroomParticipants, ({ one }) => ({
+	classroom: one(classrooms, {
+		fields: [classroomParticipants.classroomId],
+		references: [classrooms.id]
+	}),
+	user: one(user, { fields: [classroomParticipants.userId], references: [user.id] })
+}));
+
 export const trainerSessionsRelations = relations(trainerSessions, ({ one, many }) => ({
 	scenario: one(trainerScenarios, {
 		fields: [trainerSessions.scenarioId],
@@ -485,6 +559,10 @@ export const trainerSessionsRelations = relations(trainerSessions, ({ one, many 
 	organization: one(organizations, {
 		fields: [trainerSessions.organizationId],
 		references: [organizations.id]
+	}),
+	classroom: one(classrooms, {
+		fields: [trainerSessions.classroomId],
+		references: [classrooms.id]
 	}),
 	instructor: one(user, { fields: [trainerSessions.instructorId], references: [user.id] }),
 	events: many(trainerSessionEvents),

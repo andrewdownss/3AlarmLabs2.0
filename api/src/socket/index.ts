@@ -2,6 +2,7 @@ import { Server as SocketServer } from 'socket.io';
 import type { Server } from 'http';
 import { env } from '../config/env.js';
 import { socketAuth } from '../middleware/socket-auth.js';
+import { registerClassroomHandlers } from './classroom-handler.js';
 import { registerSessionHandlers } from './session-handler.js';
 
 const allowedOrigins = env.CORS_ORIGIN.split(',').map(s => s.trim());
@@ -17,6 +18,7 @@ export function createSocketServer(httpServer: Server) {
 
 	io.on('connection', (socket) => {
 		console.log(`[socket] Client connected: ${socket.id}`);
+		registerClassroomHandlers(io, socket);
 		registerSessionHandlers(io, socket);
 
 		socket.on('disconnect', () => {

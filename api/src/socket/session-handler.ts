@@ -1,6 +1,11 @@
 import type { Server, Socket } from 'socket.io';
 import { db } from '../db/index.js';
-import { trainerSessions, trainerSessionEvents, trainerCommandBoardEntries } from '../db/schema/trainer.js';
+import {
+	classrooms,
+	trainerSessions,
+	trainerSessionEvents,
+	trainerCommandBoardEntries
+} from '../db/schema/trainer.js';
 import { eq, and } from 'drizzle-orm';
 import { getSessionForUser } from '../middleware/authz.js';
 import { applyStateDispatch } from '../lib/state-dispatch.js';
@@ -8,6 +13,57 @@ import { evaluateAfterBoardChange } from '../lib/self-paced-runtime.js';
 
 function getSocketUserId(socket: Socket): string | undefined {
 	return (socket as Socket & { userId?: string }).userId;
+}
+
+function getSocketParticipantId(socket: Socket): string | undefined {
+	return socket.data.participantId;
+}
+
+interface SessionAccess {
+	session: NonNullable<Awaited<ReturnType<typeof loadSessionRow>>>;
+	isInstructor: boolean;
+	isCalledOnParticipant: boolean;
+}
+
+async function loadSessionRow(sessionId: string) {
+	const [row] = await db.select().from(trainerSessions).where(eq(trainerSessions.id, sessionId)).limit(1);
+	return row ?? null;
+}
+
+async function getSessionAccessForSocket(socket: Socket, sessionId: string): Promise<SessionAccess | null> {
+	const userId = getSocketUserId(socket);
+	const participantId = getSocketParticipantId(socket);
+	const session = await loadSessionRow(sessionId);
+	if (!session) return null;
+
+	if (session.mode !== 'classroom') {
+		if (!userId) return null;
+		const participantSession = await getSessionForUser(sessionId, userId);
+		if (!participantSession) return null;
+		return {
+			session,
+			isInstructor: participantSession.instructorId === userId,
+			isCalledOnParticipant: false
+		};
+	}
+
+	if (!session.classroomId) return null;
+	const [classroom] = await db
+		.select()
+		.from(classrooms)
+		.where(eq(classrooms.id, session.classroomId))
+		.limit(1);
+	if (!classroom || classroom.endedAt) return null;
+
+	const isInstructor = Boolean(userId && classroom.instructorId === userId);
+	const isCalledOnParticipant = Boolean(
+		participantId &&
+			socket.data.classroomId === classroom.id &&
+			classroom.calledOnParticipantId === participantId
+	);
+
+	if (!isInstructor && !isCalledOnParticipant) return null;
+	return { session, isInstructor, isCalledOnParticipant };
 }
 
 interface FinalizeOptions {
@@ -86,20 +142,18 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 	socket.on('trainer:state:dispatch', async (data: any) => {
 		const { sessionId, ...stateUpdate } = data;
 		if (!sessionId) return;
-		const userId = getSocketUserId(socket);
-		if (!userId) return;
-		const session = await getSessionForUser(sessionId, userId);
-		if (!session) return;
+		const access = await getSessionAccessForSocket(socket, sessionId);
+		if (!access) return;
+		if (access.session.mode === 'classroom' && !access.isInstructor) return;
 
 		await applyStateDispatch(io, sessionId, stateUpdate, { source: 'instructor' });
 	});
 
 	socket.on('trainer:session:start', async (data: { sessionId: string }) => {
 		if (!data.sessionId) return;
-		const userId = getSocketUserId(socket);
-		if (!userId) return;
-		const session = await getSessionForUser(data.sessionId, userId);
-		if (!session) return;
+		const access = await getSessionAccessForSocket(socket, data.sessionId);
+		if (!access) return;
+		if (access.session.mode === 'classroom' && !access.isInstructor) return;
 
 		const startedAt = new Date();
 		await db.update(trainerSessions).set({ hasStarted: true, startedAt }).where(eq(trainerSessions.id, data.sessionId));
@@ -118,10 +172,8 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 		status?: string;
 	}) => {
 		if (!data.sessionId || !data.unitName || !data.division) return;
-		const userId = getSocketUserId(socket);
-		if (!userId) return;
-		const session = await getSessionForUser(data.sessionId, userId);
-		if (!session) return;
+		const access = await getSessionAccessForSocket(socket, data.sessionId);
+		if (!access) return;
 
 		const existing = await db.select().from(trainerCommandBoardEntries)
 			.where(and(
@@ -164,10 +216,9 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 		radioMessageId?: string;
 	}) => {
 		if (!data.sessionId || !data.unitName) return;
-		const userId = getSocketUserId(socket);
-		if (!userId) return;
-		const session = await getSessionForUser(data.sessionId, userId);
-		if (!session) return;
+		const access = await getSessionAccessForSocket(socket, data.sessionId);
+		if (!access) return;
+		const actorId = getSocketUserId(socket) ?? getSocketParticipantId(socket) ?? 'unknown';
 
 		const existing = await db.select().from(trainerCommandBoardEntries)
 			.where(and(
@@ -208,7 +259,7 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 				division,
 				assignment,
 				status,
-				correctedBy: userId,
+				correctedBy: actorId,
 				radioMessageId: data.radioMessageId ?? null
 			}
 		});
@@ -222,10 +273,8 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 
 	socket.on('trainer:board:remove', async (data: { sessionId: string; unitName: string }) => {
 		if (!data.sessionId || !data.unitName) return;
-		const userId = getSocketUserId(socket);
-		if (!userId) return;
-		const session = await getSessionForUser(data.sessionId, userId);
-		if (!session) return;
+		const access = await getSessionAccessForSocket(socket, data.sessionId);
+		if (!access) return;
 		await db.delete(trainerCommandBoardEntries)
 			.where(and(
 				eq(trainerCommandBoardEntries.sessionId, data.sessionId),
@@ -237,10 +286,8 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 
 	socket.on('trainer:board:update-status', async (data: { sessionId: string; unitName: string; status: string }) => {
 		if (!data.sessionId || !data.unitName || !data.status) return;
-		const userId = getSocketUserId(socket);
-		if (!userId) return;
-		const session = await getSessionForUser(data.sessionId, userId);
-		if (!session) return;
+		const access = await getSessionAccessForSocket(socket, data.sessionId);
+		if (!access) return;
 		await db.update(trainerCommandBoardEntries)
 			.set({ status: data.status, lastUpdatedAt: new Date() })
 			.where(and(
@@ -256,10 +303,9 @@ export function registerSessionHandlers(io: Server, socket: Socket) {
 
 	socket.on('trainer:session:end', async (data: { sessionId: string }) => {
 		if (!data.sessionId) return;
-		const userId = getSocketUserId(socket);
-		if (!userId) return;
-		const session = await getSessionForUser(data.sessionId, userId);
-		if (!session) return;
+		const access = await getSessionAccessForSocket(socket, data.sessionId);
+		if (!access) return;
+		if (access.session.mode === 'classroom' && !access.isInstructor) return;
 
 		await finalizeTrainerSession(io, data.sessionId, { payload: { reason: 'ended_by_user' } });
 		untrackTrainerSession(socket, data.sessionId);

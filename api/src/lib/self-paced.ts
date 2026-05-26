@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 
-export type SimulationOutcome = 'in_progress' | 'completed' | 'failed' | 'timeout';
+export type SimulationOutcome = 'in_progress' | 'completed' | 'failed' | 'timeout' | 'ended';
 
 export type SelfPacedScheduledEventKind =
 	| 'assignment_completion'

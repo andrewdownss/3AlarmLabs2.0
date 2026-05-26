@@ -3,7 +3,7 @@
  * Shared by API routes, the timeline engine, and the radio matcher.
  */
 import { z } from 'zod';
-export type SimulationOutcome = 'in_progress' | 'completed' | 'failed' | 'timeout';
+export type SimulationOutcome = 'in_progress' | 'completed' | 'failed' | 'timeout' | 'ended';
 export type SelfPacedScheduledEventKind = 'assignment_completion' | 'time_warning' | 'force_end';
 export interface SelfPacedDispatchPayload {
     stage?: 'incipient' | 'growth' | 'fully_developed' | 'decay';

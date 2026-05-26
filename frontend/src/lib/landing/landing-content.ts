@@ -58,6 +58,10 @@ export const TEAM_ACCESS_HREF = '#team-access';
 export const INDIVIDUAL_SIGNUP_HREF = '/signup?next=%2Fapp%2Fstart-individual';
 export const SAVE_REPLAY_SIGNUP_HREF = '/signup?next=%2Fapp%2Fcommand';
 
+/** Hero preview screenshot */
+export const heroPreviewImageUrl =
+	'https://hero.3alarmlabs.com/Screenshot%202026-05-26%20at%203.09.57%E2%80%AFPM.png';
+
 export const heroHeadline = 'Practice command before the tones drop.';
 export const heroSubheading =
 	'Step into realistic fireground scenarios with radio traffic, unit assignments, shifting conditions, and replay review. Train solo for the next seat up, or run it with your crew.';

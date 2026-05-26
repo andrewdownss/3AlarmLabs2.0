@@ -36,7 +36,11 @@ function isSocketIoRequest(url) {
 
 const server = http.createServer((req, res) => {
 	const url = req.url ?? '/';
-	if (url.startsWith('/api/trainer/')) {
+	if (
+		url.startsWith('/api/trainer/') ||
+		url.startsWith('/api/classroom/') ||
+		url.startsWith('/api/demo/')
+	) {
 		apiProxy.web(req, res);
 		return;
 	}

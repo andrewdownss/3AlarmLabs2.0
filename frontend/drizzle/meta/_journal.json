@@ -1,0 +1,41 @@
+{
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1714330000000,
+			"tag": "0001_individual_pivot",
+			"breakpoints": false
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1714331000000,
+			"tag": "0002_phase2",
+			"breakpoints": false
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1715711000000,
+			"tag": "0003_demo_scenario",
+			"breakpoints": false
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1716237000000,
+			"tag": "0004_org_member_instructor_role",
+			"breakpoints": false
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1716663000000,
+			"tag": "0005_classroom",
+			"breakpoints": false
+		}
+	]
+}

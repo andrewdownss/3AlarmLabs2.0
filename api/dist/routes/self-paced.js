@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, eq, isNull, lte, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { trainerScenarios, trainerScheduledEvents, trainerSessionEvents, trainerSessions, trainerRadioMessages, trainerCommandBoardEntries } from '../db/schema/trainer.js';
 import { getSessionForUser } from '../middleware/authz.js';
@@ -265,7 +265,8 @@ export function startSelfPacedPoller(io, intervalMs = 2000) {
             const activeRows = await db
                 .select({ id: trainerSessions.id })
                 .from(trainerSessions)
-                .where(and(eq(trainerSessions.hasStarted, true), isNull(trainerSessions.endedAt)));
+                .leftJoin(trainerScenarios, eq(trainerSessions.scenarioId, trainerScenarios.id))
+                .where(and(eq(trainerSessions.hasStarted, true), isNull(trainerSessions.endedAt), or(ne(trainerSessions.mode, 'classroom'), isNotNull(trainerScenarios.selfPacedConfigJson))));
             const sessionIds = new Set([
                 ...dueScheduled.map((r) => r.sessionId),
                 ...activeRows.map((r) => r.id)

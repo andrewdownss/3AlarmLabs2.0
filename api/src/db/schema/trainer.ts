@@ -4,6 +4,7 @@ import {
   timestamp,
   jsonb,
   index,
+  uniqueIndex,
   pgEnum,
   boolean,
   integer,
@@ -17,6 +18,7 @@ import type {
 export const trainerSessionModeEnum = pgEnum("trainer_session_mode", [
   "instructor_led",
   "self_practice",
+  "classroom",
 ]);
 
 export const organizations = pgTable("organizations", {
@@ -24,6 +26,25 @@ export const organizations = pgTable("organizations", {
   planId: text("plan_id").notNull().default("expired"),
   isPersonal: boolean("is_personal").default(false).notNull(),
 });
+
+export const organizationMembers = pgTable(
+  "organization_members",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    role: text("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("api_org_members_org_id_idx").on(table.organizationId),
+    index("api_org_members_user_id_idx").on(table.userId),
+  ],
+);
 
 export const trainerScenarios = pgTable(
   "trainer_scenarios",
@@ -78,6 +99,57 @@ export const trainerScenarios = pgTable(
   ],
 );
 
+export const classrooms = pgTable(
+  "classrooms",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").references(() => organizations.id, {
+      onDelete: "set null",
+    }),
+    instructorId: text("instructor_id"),
+    name: text("name").notNull(),
+    code: text("code").notNull().unique(),
+    maxSeats: integer("max_seats").notNull().default(100),
+    activeSessionId: text("active_session_id"),
+    calledOnParticipantId: text("called_on_participant_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    index("classrooms_org_id_idx").on(table.organizationId),
+    index("classrooms_instructor_id_idx").on(table.instructorId),
+    uniqueIndex("classrooms_code_idx").on(table.code),
+  ],
+);
+
+export const classroomParticipants = pgTable(
+  "classroom_participants",
+  {
+    id: text("id").primaryKey(),
+    classroomId: text("classroom_id")
+      .notNull()
+      .references(() => classrooms.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    userId: text("user_id"),
+    joinedAt: timestamp("joined_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    kickedAt: timestamp("kicked_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    index("classroom_participants_classroom_idx").on(table.classroomId),
+    index("classroom_participants_presence_idx").on(
+      table.classroomId,
+      table.lastSeenAt,
+    ),
+  ],
+);
+
 export const trainerSessions = pgTable(
   "trainer_sessions",
   {
@@ -90,11 +162,15 @@ export const trainerSessions = pgTable(
     organizationId: text("organization_id").references(() => organizations.id, {
       onDelete: "set null",
     }),
+    classroomId: text("classroom_id").references(() => classrooms.id, {
+      onDelete: "set null",
+    }),
     instructorId: text("instructor_id"),
     studentId: text("student_id"),
     activeStage: text("active_stage").notNull().default("incipient"),
     activeSide: text("active_side").notNull().default("alpha"),
     hasStarted: boolean("has_started").notNull().default(false),
+    reviewVisible: boolean("review_visible").notNull().default(true),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" })
       .defaultNow()
       .notNull(),

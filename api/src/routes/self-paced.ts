@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, eq, isNull, lte, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import type { Server } from 'socket.io';
 import { db } from '../db/index.js';
 import {
@@ -288,8 +288,16 @@ export function startSelfPacedPoller(io: Server, intervalMs = 2000): NodeJS.Time
 			const activeRows = await db
 				.select({ id: trainerSessions.id })
 				.from(trainerSessions)
+				.leftJoin(trainerScenarios, eq(trainerSessions.scenarioId, trainerScenarios.id))
 				.where(
-					and(eq(trainerSessions.hasStarted, true), isNull(trainerSessions.endedAt))
+					and(
+						eq(trainerSessions.hasStarted, true),
+						isNull(trainerSessions.endedAt),
+						or(
+							ne(trainerSessions.mode, 'classroom'),
+							isNotNull(trainerScenarios.selfPacedConfigJson)
+						)
+					)
 				);
 
 			const sessionIds = new Set<string>([

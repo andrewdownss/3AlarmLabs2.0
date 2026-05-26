@@ -1,14 +1,42 @@
 import { eq, and, gt } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { session } from '../db/schema/trainer.js';
+import { classroomParticipants, classrooms, session } from '../db/schema/trainer.js';
 import { parseBetterAuthSessionCookieHeader, sessionTokenFromBetterAuthCookieValue } from '../lib/better-auth-session-token.js';
+import { CLASSROOM_COOKIE_NAME, verifyClassroomCookieValue } from '../lib/classroom-cookie.js';
 import cookie from 'cookie';
+async function authenticateClassroomParticipant(header, socket) {
+    const parsedCookies = cookie.parse(header);
+    const classroomPayload = verifyClassroomCookieValue(parsedCookies[CLASSROOM_COOKIE_NAME]);
+    if (!classroomPayload)
+        return false;
+    const [participant] = await db
+        .select({
+        id: classroomParticipants.id,
+        displayName: classroomParticipants.displayName,
+        kickedAt: classroomParticipants.kickedAt,
+        classroomEndedAt: classrooms.endedAt
+    })
+        .from(classroomParticipants)
+        .innerJoin(classrooms, eq(classroomParticipants.classroomId, classrooms.id))
+        .where(and(eq(classroomParticipants.id, classroomPayload.participantId), eq(classroomParticipants.classroomId, classroomPayload.classroomId)))
+        .limit(1);
+    if (!participant || participant.kickedAt || participant.classroomEndedAt)
+        return false;
+    socket.data.role = 'student-anon';
+    socket.data.classroomId = classroomPayload.classroomId;
+    socket.data.participantId = classroomPayload.participantId;
+    socket.data.displayName = participant.displayName;
+    return true;
+}
 export async function socketAuth(socket, next) {
     try {
         const header = socket.handshake.headers.cookie || '';
         const parsed = parseBetterAuthSessionCookieHeader(header);
         if (!parsed) {
-            const names = Object.keys(cookie.parse(header)).join(', ');
+            if (await authenticateClassroomParticipant(header, socket))
+                return next();
+            const parsedCookies = cookie.parse(header);
+            const names = Object.keys(parsedCookies).join(', ');
             console.warn(`[socket-auth] No session cookie. Available cookies: [${names}]`);
             return next(new Error('Not authenticated'));
         }
@@ -32,9 +60,16 @@ export async function socketAuth(socket, next) {
                 console.warn(`[socket-auth] No session row for token (first 8: ${sessionToken.slice(0, 8)}…). ` +
                     `Cookie name: ${cookieName}, raw length: ${token.length}, derived length: ${sessionToken.length}`);
             }
+            if (await authenticateClassroomParticipant(header, socket))
+                return next();
             return next(new Error('Session expired'));
         }
         socket.userId = found[0].userId;
+        socket.data.role = 'user';
+        // A logged-in browser can still join a public classroom as a named participant.
+        // Keep the user identity for instructor checks, but also attach classroom participant data if present.
+        await authenticateClassroomParticipant(header, socket);
+        socket.data.role = 'user';
         next();
     }
     catch (err) {

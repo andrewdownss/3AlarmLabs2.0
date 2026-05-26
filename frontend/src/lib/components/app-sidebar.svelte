@@ -2,10 +2,12 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { performLogout } from '$lib/auth-client';
+	import { canHostClassroom } from '$lib/plans';
 	import posthog from 'posthog-js';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import HomeIcon from '@lucide/svelte/icons/home';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
+	import PresentationIcon from '@lucide/svelte/icons/presentation';
 	import LayoutListIcon from '@lucide/svelte/icons/layout-list';
 	import CreditCardIcon from '@lucide/svelte/icons/credit-card';
 	import UsersIcon from '@lucide/svelte/icons/users';
@@ -19,7 +21,16 @@
 	let { data }: Props = $props();
 
 	const isActive = $derived.by(
-		() => (href: string) => page.url.pathname === href || page.url.pathname.startsWith(`${href}/`)
+		() => (href: string) => {
+			const path = page.url.pathname;
+			if (href === '/app/command') {
+				return (
+					path === href ||
+					(path.startsWith(`${href}/`) && !path.startsWith('/app/command/classroom'))
+				);
+			}
+			return path === href || path.startsWith(`${href}/`);
+		}
 	);
 
 	interface NavItem {
@@ -33,6 +44,9 @@
 			{ label: 'SizeUp', href: '/app/sizeup', icon: HomeIcon },
 			{ label: 'Command', href: '/app/command', icon: MessageSquareIcon }
 		];
+		if (canHostClassroom(data.planConfig)) {
+			items.push({ label: 'Classroom', href: '/app/command/classroom', icon: PresentationIcon });
+		}
 		if (data.user?.isAdmin) {
 			items.push({ label: 'Admin', href: '/app/admin', icon: LayoutListIcon });
 		}

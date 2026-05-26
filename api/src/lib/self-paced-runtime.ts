@@ -9,6 +9,7 @@ import type { Server } from "socket.io";
 import { and, asc, eq, isNull, lte } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
+  classrooms,
   trainerCommandBoardEntries,
   trainerScenarios,
   trainerScheduledEvents,
@@ -460,7 +461,10 @@ export async function endSession(
   opts: EndSessionOptions,
 ): Promise<void> {
   const [row] = await db
-    .select({ endedAt: trainerSessions.endedAt })
+    .select({
+      endedAt: trainerSessions.endedAt,
+      classroomId: trainerSessions.classroomId,
+    })
     .from(trainerSessions)
     .where(eq(trainerSessions.id, sessionId))
     .limit(1);
@@ -496,4 +500,15 @@ export async function endSession(
     outcome: opts.outcome,
     reason: opts.reason,
   });
+
+  if (row.classroomId) {
+    await db
+      .update(classrooms)
+      .set({ activeSessionId: null, calledOnParticipantId: null })
+      .where(eq(classrooms.id, row.classroomId));
+    io.to(`classroom:${row.classroomId}`).emit("classroom:scenario-ended", {
+      outcome: opts.outcome,
+      reason: opts.reason,
+    });
+  }
 }

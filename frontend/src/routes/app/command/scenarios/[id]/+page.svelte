@@ -1030,7 +1030,7 @@
 												type="number"
 												min="0"
 												step="1"
-												class="w-[5.5rem]"
+												class="w-22"
 												placeholder="—"
 												value={selfPacedConfig.timeLimitSeconds == null
 													? ''
@@ -1060,7 +1060,7 @@
 												min="0"
 												max="59"
 												step="1"
-												class="w-[5.5rem]"
+												class="w-22"
 												placeholder="—"
 												value={selfPacedConfig.timeLimitSeconds == null
 													? ''
@@ -1207,10 +1207,10 @@
 												Click a dot to jump to that card.
 											</p>
 											<div
-												class="relative min-h-[9rem] overflow-x-auto rounded-xl border border-primary/15 bg-background/70 px-3 py-10 sm:min-h-[10.5rem] sm:px-5 sm:py-12 dark:bg-background/50"
+												class="relative min-h-36 overflow-x-auto rounded-xl border border-primary/15 bg-background/70 px-3 py-10 sm:min-h-42 sm:px-5 sm:py-12 dark:bg-background/50"
 											>
 												<div
-													class="relative mx-auto min-h-[6.5rem] max-w-5xl min-w-[280px] px-1 sm:min-h-[7rem] sm:px-3"
+													class="relative mx-auto min-h-26 max-w-5xl min-w-[280px] px-1 sm:min-h-28 sm:px-3"
 												>
 													<div
 														class="absolute top-1/2 right-3 left-3 h-3 -translate-y-1/2 rounded-full bg-muted shadow-inner"
@@ -1256,7 +1256,7 @@
 																{pi + 1}
 															</span>
 															<span
-																class="max-w-[6rem] truncate text-center text-xs font-semibold text-foreground tabular-nums"
+																class="max-w-24 truncate text-center text-xs font-semibold text-foreground tabular-nums"
 															>
 																{formatDurationShort(off)}
 															</span>
@@ -1275,7 +1275,7 @@
 																title="Deadline {formatDurationShort(d)}"
 															>
 																<div
-																	class="h-0 w-0 border-x-[6px] border-b-[8px] border-x-transparent border-b-amber-500 drop-shadow-sm"
+																	class="h-0 w-0 border-x-[6px] border-b-8 border-x-transparent border-b-amber-500 drop-shadow-sm"
 																></div>
 															</div>
 														{/if}
@@ -1355,7 +1355,7 @@
 																class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1"
 															>
 																<span
-																	class="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-bold text-primary-foreground tabular-nums shadow-sm"
+																	class="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-bold text-primary-foreground tabular-nums shadow-sm"
 																	title="Chronological order (matches dots on the preview strip)"
 																>
 																	{timelineChronologicalRank[event.id] ?? ti + 1}
@@ -1375,7 +1375,7 @@
 																				type="number"
 																				min="0"
 																				step="1"
-																				class="h-10 w-[4.75rem] border-2 text-center text-lg font-bold tabular-nums"
+																				class="h-10 w-19 border-2 text-center text-lg font-bold tabular-nums"
 																				value={Math.floor(
 																					clampNonNegInt(event.offsetSeconds ?? 0) / 60
 																				)}
@@ -1402,7 +1402,7 @@
 																				min="0"
 																				max="59"
 																				step="1"
-																				class="h-10 w-[4.75rem] border-2 text-center text-lg font-bold tabular-nums"
+																				class="h-10 w-19 border-2 text-center text-lg font-bold tabular-nums"
 																				value={clampNonNegInt(event.offsetSeconds ?? 0) % 60}
 																				oninput={(e) => {
 																					let ss = clampNonNegInt(
@@ -1640,7 +1640,7 @@
 													>
 														<div class="flex flex-wrap items-center gap-2">
 															<span
-																class="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg bg-amber-600 px-2.5 text-sm font-bold text-white shadow-sm"
+																class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg bg-amber-600 px-2.5 text-sm font-bold text-white shadow-sm"
 															>
 																{ai + 1}
 															</span>
@@ -1721,7 +1721,7 @@
 																			type="number"
 																			min="0"
 																			step="1"
-																			class="h-9 w-[4.5rem] border-amber-200/80 dark:border-amber-900/50"
+																			class="h-9 w-18 border-amber-200/80 dark:border-amber-900/50"
 																			value={action.deadlineSeconds == null
 																				? ''
 																				: Math.floor(action.deadlineSeconds / 60)}
@@ -1750,7 +1750,7 @@
 																			min="0"
 																			max="59"
 																			step="1"
-																			class="h-9 w-[4.5rem] border-amber-200/80 dark:border-amber-900/50"
+																			class="h-9 w-18 border-amber-200/80 dark:border-amber-900/50"
 																			value={action.deadlineSeconds == null
 																				? ''
 																				: action.deadlineSeconds % 60}
@@ -1870,7 +1870,7 @@
 													>
 														<div class="flex flex-wrap items-center gap-2">
 															<span
-																class="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg bg-violet-600 px-2.5 text-sm font-bold text-white shadow-sm"
+																class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg bg-violet-600 px-2.5 text-sm font-bold text-white shadow-sm"
 															>
 																{ri + 1}
 															</span>
@@ -2018,7 +2018,7 @@
 																			type="number"
 																			min="0"
 																			step="1"
-																			class="h-9 w-[4.5rem] border-violet-200/80 font-semibold tabular-nums dark:border-violet-900/50"
+																			class="h-9 w-18 border-violet-200/80 font-semibold tabular-nums dark:border-violet-900/50"
 																			value={Math.floor(
 																				clampNonNegInt(rule.delaySeconds ?? 0) / 60
 																			)}
@@ -2045,7 +2045,7 @@
 																			min="0"
 																			max="59"
 																			step="1"
-																			class="h-9 w-[4.5rem] border-violet-200/80 font-semibold tabular-nums dark:border-violet-900/50"
+																			class="h-9 w-18 border-violet-200/80 font-semibold tabular-nums dark:border-violet-900/50"
 																			value={clampNonNegInt(rule.delaySeconds ?? 0) % 60}
 																			oninput={(e) => {
 																				let ss = clampNonNegInt(

@@ -6,9 +6,10 @@ import type { SimulationOutcome } from '../lib/self-paced.js';
 export interface SessionRow {
 	id: string;
 	scenarioId: string;
-	mode: 'instructor_led' | 'self_practice';
+	mode: 'instructor_led' | 'self_practice' | 'classroom';
 	joinCode: string | null;
 	organizationId: string | null;
+	classroomId: string | null;
 	instructorId: string | null;
 	studentId: string | null;
 	activeStage: string;

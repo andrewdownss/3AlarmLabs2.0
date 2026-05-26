@@ -5,7 +5,7 @@
  * mirrored copy at `api/src/lib/self-paced.ts` — keep them in sync.
  */
 
-export type SimulationOutcome = 'in_progress' | 'completed' | 'failed' | 'timeout';
+export type SimulationOutcome = 'in_progress' | 'completed' | 'failed' | 'timeout' | 'ended';
 
 export type SelfPacedScheduledEventKind =
 	| 'assignment_completion'
@@ -71,7 +71,8 @@ export const SIMULATION_OUTCOMES: ReadonlyArray<SimulationOutcome> = [
 	'in_progress',
 	'completed',
 	'failed',
-	'timeout'
+	'timeout',
+	'ended'
 ];
 
 export function isValidSelfPacedConfig(value: unknown): value is SelfPacedConfig {

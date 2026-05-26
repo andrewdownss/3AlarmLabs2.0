@@ -6,6 +6,8 @@ import { requireAuth } from './middleware/auth.js';
 import scenariosRouter from './routes/scenarios.js';
 import { createSessionsRouter } from './routes/sessions.js';
 import { createRadioRouter } from './routes/radio.js';
+import { createDemoRadioRouter } from './routes/demo-radio.js';
+import { createClassroomRadioRouter } from './routes/classroom-radio.js';
 import { createSelfPacedRouter, startSelfPacedPoller } from './routes/self-paced.js';
 import { createSocketServer } from './socket/index.js';
 const app = express();
@@ -19,6 +21,8 @@ app.use('/api/trainer/scenarios', requireAuth, scenariosRouter);
 app.use('/api/trainer/sessions', requireAuth, createSessionsRouter(io));
 app.use('/api/trainer/sessions', requireAuth, createSelfPacedRouter(io));
 app.use('/api/trainer/radio', requireAuth, createRadioRouter(io));
+app.use('/api/classroom/radio', createClassroomRadioRouter(io));
+app.use('/api/demo/radio', createDemoRadioRouter());
 const port = parseInt(env.API_PORT, 10);
 httpServer.listen(port, () => {
     console.log(`[api] Listening on port ${port}`);

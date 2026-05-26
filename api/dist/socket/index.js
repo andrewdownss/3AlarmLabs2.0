@@ -1,6 +1,7 @@
 import { Server as SocketServer } from 'socket.io';
 import { env } from '../config/env.js';
 import { socketAuth } from '../middleware/socket-auth.js';
+import { registerClassroomHandlers } from './classroom-handler.js';
 import { registerSessionHandlers } from './session-handler.js';
 const allowedOrigins = env.CORS_ORIGIN.split(',').map(s => s.trim());
 /** Single-node Socket.io. For multiple API replicas, add the Redis adapter and sticky sessions at the load balancer. */
@@ -12,6 +13,7 @@ export function createSocketServer(httpServer) {
     io.use(socketAuth);
     io.on('connection', (socket) => {
         console.log(`[socket] Client connected: ${socket.id}`);
+        registerClassroomHandlers(io, socket);
         registerSessionHandlers(io, socket);
         socket.on('disconnect', () => {
             console.log(`[socket] Client disconnected: ${socket.id}`);

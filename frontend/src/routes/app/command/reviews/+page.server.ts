@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { desc, eq, inArray, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { organizationMembers, trainerSessions, user as userTable } from '$lib/server/db/schema';
 
@@ -20,12 +20,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const sessions = await db.query.trainerSessions.findMany({
 		where: ownedOrganizationId
-			? or(
-					eq(trainerSessions.studentId, userId),
-					eq(trainerSessions.instructorId, userId),
-					eq(trainerSessions.organizationId, ownedOrganizationId)
+			? and(
+					or(ne(trainerSessions.mode, 'classroom'), eq(trainerSessions.reviewVisible, true)),
+					or(
+						eq(trainerSessions.studentId, userId),
+						eq(trainerSessions.instructorId, userId),
+						eq(trainerSessions.organizationId, ownedOrganizationId)
+					)
 				)
-			: or(eq(trainerSessions.studentId, userId), eq(trainerSessions.instructorId, userId)),
+			: and(
+					or(ne(trainerSessions.mode, 'classroom'), eq(trainerSessions.reviewVisible, true)),
+					or(eq(trainerSessions.studentId, userId), eq(trainerSessions.instructorId, userId))
+				),
 		orderBy: [desc(trainerSessions.startedAt)],
 		columns: {
 			id: true,
