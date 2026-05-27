@@ -36,6 +36,20 @@
 			"when": 1716663000000,
 			"tag": "0005_classroom",
 			"breakpoints": false
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1716837000000,
+			"tag": "0006_classroom_options",
+			"breakpoints": false
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1716838000000,
+			"tag": "0007_dynamic_board_columns",
+			"breakpoints": false
 		}
 	]
 }

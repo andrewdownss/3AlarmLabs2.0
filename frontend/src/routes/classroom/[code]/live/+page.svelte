@@ -10,9 +10,11 @@
 	} from '$lib/components/scene-editor/konva-overlay-editor/overlay-utils';
 	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
 	import {
-		COMMAND_BOARD_COLUMNS,
+		buildBoardColumns,
+		commandBoardHeader,
 		entriesForColumn,
 		formatUnitAssignmentLine,
+		type BoardColumnState,
 		type BoardEntryLike
 	} from '$lib/trainer-command-board';
 	import type { PageData } from './$types';
@@ -23,6 +25,7 @@
 
 	interface BoardEntry {
 		id: string;
+		slotIndex?: number | null;
 		division: string;
 		unitName: string;
 		assignment: string | null;
@@ -41,6 +44,7 @@
 		sideCharlieImageUrl?: string | null;
 		sideDeltaImageUrl?: string | null;
 		stageMetadataJson?: unknown;
+		defaultResources?: Array<{ unitName: string; status?: string }> | null;
 	}
 
 	const stageLabels: Record<string, string> = {
@@ -82,7 +86,8 @@
 			currentSide: pageData.activeSession?.activeSide ?? 'alpha',
 			startedAt: pageData.activeSession?.startedAt ?? null,
 			calledOnParticipantId: pageData.classroom.calledOnParticipantId,
-			boardEntries: pageData.boardEntries as BoardEntry[]
+			boardEntries: pageData.boardEntries as BoardEntry[],
+			boardColumns: buildBoardColumns(pageData.boardColumns)
 		};
 	}
 
@@ -95,6 +100,7 @@
 	let currentSide = $state(initialLiveState.currentSide);
 	let calledOnParticipantId = $state(initialLiveState.calledOnParticipantId);
 	let boardEntries = $state<BoardEntry[]>(initialLiveState.boardEntries);
+	let boardColumns = $state<BoardColumnState[]>(initialLiveState.boardColumns);
 	let sessionEndedReason = $state<SessionEndedReason | null>(data.sessionEndedReason);
 	let connectionStatus = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 	let radioError = $state<string | null>(null);
@@ -113,6 +119,9 @@
 	let activeStream: MediaStream | null = null;
 	let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 	let clockInterval: ReturnType<typeof setInterval> | null = null;
+	let dispatchUnitName = $state('');
+	let dispatchDivision = $state(boardColumns[7]?.label ?? 'Working Assignments');
+	let dispatchAssignment = $state('');
 
 	const isCalledOn = $derived(calledOnParticipantId === data.participant.id);
 	const isLive = $derived(Boolean(activeSessionId && hasStarted && scenario));
@@ -166,6 +175,7 @@
 		hasStarted = false;
 		scenario = null;
 		boardEntries = [];
+		boardColumns = buildBoardColumns();
 		calledOnParticipantId = null;
 		stopRecording();
 	}
@@ -187,6 +197,12 @@
 	const currentOverlays = $derived(getOverlaysForSideStage(currentSide, currentStage));
 	const hasOverlays = $derived(currentOverlays.length > 0);
 	const overlayKey = $derived(`${currentSide}-${currentStage}`);
+
+	const availableUnits = $derived(
+		(scenario?.defaultResources ?? []).filter(
+			(resource) => !boardEntries.some((entry) => entry.unitName === resource.unitName)
+		)
+	);
 
 	function joinClassroom() {
 		socket?.emit('classroom:join', { classroomId: data.classroom.id });
@@ -269,6 +285,19 @@
 		if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
 	}
 
+	function submitBoardEntry() {
+		if (!isCalledOn || !activeSessionId || !dispatchUnitName.trim()) return;
+		socket?.emit('trainer:board:correct', {
+			sessionId: activeSessionId,
+			unitName: dispatchUnitName.trim(),
+			division: dispatchDivision,
+			assignment: dispatchAssignment.trim(),
+			status: 'Assigned'
+		});
+		dispatchUnitName = '';
+		dispatchAssignment = '';
+	}
+
 	onMount(() => {
 		if (sessionEndedReason) return;
 
@@ -294,6 +323,7 @@
 			currentSide = payload.activeSession?.activeSide ?? 'alpha';
 			calledOnParticipantId = payload.calledOnParticipantId ?? null;
 			boardEntries = payload.boardEntries ?? [];
+			boardColumns = buildBoardColumns(payload.boardColumns);
 			if (payload.activeSession?.hasStarted) {
 				resetTimeline(true);
 				if (payload.activeSession.startedAt) {
@@ -311,7 +341,8 @@
 			scenario = payload.scenario ?? null;
 			currentStage = payload.session?.activeStage ?? 'incipient';
 			currentSide = payload.session?.activeSide ?? 'alpha';
-			boardEntries = [];
+			boardEntries = payload.boardEntries ?? [];
+			boardColumns = buildBoardColumns(payload.boardColumns);
 			sessionSeconds = 0;
 			resetTimeline(false);
 		});
@@ -326,6 +357,7 @@
 			hasStarted = false;
 			scenario = null;
 			boardEntries = [];
+			boardColumns = buildBoardColumns();
 			calledOnParticipantId = null;
 			sessionSeconds = 0;
 			stopRecording();
@@ -359,7 +391,13 @@
 			if (payload.hazard) addTimelineEvent('HAZARD', payload.hazard, eventSeconds);
 			if (payload.update) addTimelineEvent('UPDATE', payload.update, eventSeconds);
 		});
-		socket.on('trainer:board:updated', (payload: { entry?: BoardEntry }) => {
+		socket.on('trainer:board:updated', (payload: { entry?: BoardEntry; entries?: BoardEntry[]; boardColumns?: BoardColumnState[] }) => {
+			if (payload.entries) {
+				boardEntries = payload.entries;
+				boardColumns = buildBoardColumns(payload.boardColumns);
+				if (payload.entry) addTimelineEvent('BOARD', formatBoardTimelineLine(payload.entry));
+				return;
+			}
 			const entry = payload.entry;
 			if (!entry?.unitName) return;
 			const existing = boardEntries.find((item) => item.unitName === entry.unitName);
@@ -565,24 +603,47 @@
 					>
 						<h3 class="text-xs font-semibold">Incident Command Board</h3>
 						<span class="text-[11px] text-muted-foreground sm:text-xs">
-							{boardEntries.length} assigned
+							{boardEntries.length} assigned · {availableUnits.length} available
 						</span>
 					</div>
 
+					{#if availableUnits.length > 0}
+						<div class="shrink-0 border-b px-3 py-2">
+							<p
+								class="mb-1.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase"
+							>
+								Available
+							</p>
+							<div class="flex flex-wrap gap-1.5">
+								{#each availableUnits as resource (resource.unitName)}
+									<Badge variant="secondary" class="gap-1 py-0 text-[10px]">
+										<span class="h-1 w-1 rounded-full bg-green-500"></span>
+										{resource.unitName}
+									</Badge>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
 					<div class="min-h-0 flex-1 overflow-hidden px-1 py-1.5">
-						<div class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1 lg:mx-0 lg:overflow-x-hidden lg:pb-0">
-							<div class="flex h-full min-h-[120px] w-max gap-0.5 lg:w-full lg:min-w-0">
-								{#each COMMAND_BOARD_COLUMNS as col (col.key)}
+						<div class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1">
+							<div class="flex h-full min-h-[120px] w-max gap-0.5">
+								{#each boardColumns as col (col.key)}
 									<div
-										class="flex min-h-0 w-19 shrink-0 flex-col border bg-muted/20 sm:w-21 lg:w-0 lg:min-w-0 lg:flex-1"
+										class="flex min-h-0 w-19 shrink-0 flex-col border sm:w-21 {col.colorClass}"
 									>
 										<div
-											class="flex min-h-8 shrink-0 items-center justify-center border-b bg-muted/50 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
+											class="flex min-h-8 shrink-0 flex-col items-center justify-center border-b border-inherit bg-white/45 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
 										>
-											{col.header || '\u00a0'}
+											<span>{commandBoardHeader(col) || '\u00a0'}</span>
+											{#if col.supervisorUnit}
+												<span class="mt-0.5 rounded bg-white/70 px-1 text-[7px] normal-case">
+													SUP: {col.supervisorUnit}
+												</span>
+											{/if}
 										</div>
 										<div class="min-h-0 flex-1 space-y-1 overflow-y-auto p-1">
-											{#each entriesForColumn(boardEntries as BoardEntryLike[], col.key) as entry (entry.id ?? entry.unitName)}
+											{#each entriesForColumn(boardEntries as BoardEntryLike[], col) as entry (entry.id ?? entry.unitName)}
 												<div
 													class="w-full rounded border px-1.5 py-1 text-[9px] leading-tight font-medium {STATUS_COLORS[
 														entry.status
@@ -670,6 +731,41 @@
 						<div class="w-full rounded-lg border bg-muted/50 p-2">
 							<p class="text-[10px] font-medium text-muted-foreground">AI Parsed:</p>
 							<p class="mt-0.5 text-xs">{lastTranscript}</p>
+						</div>
+					{/if}
+					{#if isCalledOn}
+						<div class="w-full rounded-lg border bg-card p-2">
+							<p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+								Assign a box
+							</p>
+							<div class="mt-2 grid gap-2">
+								<input
+									bind:value={dispatchUnitName}
+									placeholder="Unit name"
+									class="h-9 rounded-md border bg-background px-2 text-xs focus:ring-2 focus:ring-ring focus:outline-none"
+								/>
+								<select
+									bind:value={dispatchDivision}
+									class="h-9 rounded-md border bg-background px-2 text-xs focus:ring-2 focus:ring-ring focus:outline-none"
+								>
+									{#each boardColumns as col (col.key)}
+										<option value={col.label || col.header}>{col.header}</option>
+									{/each}
+								</select>
+								<input
+									bind:value={dispatchAssignment}
+									placeholder="Task, e.g. Fire attack"
+									class="h-9 rounded-md border bg-background px-2 text-xs focus:ring-2 focus:ring-ring focus:outline-none"
+								/>
+								<button
+									type="button"
+									onclick={submitBoardEntry}
+									disabled={!dispatchUnitName.trim()}
+									class="h-9 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+								>
+									Add to board
+								</button>
+							</div>
 						</div>
 					{/if}
 				</div>

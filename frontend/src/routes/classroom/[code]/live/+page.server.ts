@@ -20,7 +20,9 @@ export const load: PageServerLoad = async ({ cookies, params }) => {
 			code: true,
 			name: true,
 			activeSessionId: true,
-			calledOnParticipantId: true
+			calledOnParticipantId: true,
+			useSelfPacedScript: true,
+			boardLabelMode: true
 		}
 	});
 	if (!classroom) throw redirect(303, `/classroom/${code}`);
@@ -68,7 +70,8 @@ export const load: PageServerLoad = async ({ cookies, params }) => {
 					activeSide: true,
 					hasStarted: true,
 					startedAt: true,
-					endedAt: true
+					endedAt: true,
+					boardColumnsJson: true
 				}
 			})
 		: null;
@@ -87,7 +90,8 @@ export const load: PageServerLoad = async ({ cookies, params }) => {
 						sideBravoImageUrl: true,
 						sideCharlieImageUrl: true,
 						sideDeltaImageUrl: true,
-						stageMetadataJson: true
+						stageMetadataJson: true,
+						defaultResources: true
 					}
 				}),
 				db.query.trainerCommandBoardEntries.findMany({
@@ -102,6 +106,7 @@ export const load: PageServerLoad = async ({ cookies, params }) => {
 		participant,
 		activeSession,
 		scenario,
-		boardEntries
+		boardEntries,
+		boardColumns: activeSession?.boardColumnsJson ?? []
 	};
 };

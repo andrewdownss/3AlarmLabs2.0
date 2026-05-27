@@ -17,10 +17,11 @@
 	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
 	import type { PageData } from './$types';
 	import {
-		COMMAND_BOARD_COLUMNS,
+		buildBoardColumns,
 		entriesForColumn,
 		orphanBoardEntries,
 		formatUnitAssignmentLine,
+		type BoardColumnState,
 		type BoardEntryLike
 	} from '$lib/trainer-command-board';
 	import { parseArrivalUnit } from '$lib/components/scene-editor/simple-scenario-editor/stage-mapping';
@@ -67,7 +68,7 @@
 	let addDivisionSheetOpen = $state(false);
 
 	let dispatchUnitName = $state('');
-	let dispatchDivision = $state('Div 1');
+	let dispatchDivision = $state('Working Assignments');
 	let dispatchAssignment = $state('');
 
 	const ASSIGNMENT_SUGGESTIONS = [
@@ -182,6 +183,7 @@
 
 	interface BoardEntry {
 		id: string;
+		slotIndex?: number | null;
 		division: string;
 		unitName: string;
 		assignment: string;
@@ -202,6 +204,7 @@
 	}
 
 	let boardEntries = $state<BoardEntry[]>([]);
+	let boardColumns = $state<BoardColumnState[]>(buildBoardColumns(data.boardColumns));
 
 	let lastHydratedSessionId = $state<string | null>(null);
 
@@ -238,11 +241,13 @@
 		}
 		boardEntries = (data.boardEntries ?? []).map((e: (typeof data.boardEntries)[number]) => ({
 			id: e.id,
+			slotIndex: e.slotIndex ?? null,
 			division: e.division ?? 'Unassigned',
 			unitName: e.unitName,
 			assignment: e.assignment ?? '',
 			status: e.status ?? 'Assigned'
 		}));
+		boardColumns = buildBoardColumns(data.boardColumns);
 		activeMobileTab = boardEntries.length === 0 ? 'units' : 'board';
 		boardHasNew = false;
 		timelineHasNew = false;
@@ -297,6 +302,7 @@
 			)
 	);
 
+	const boardColumnChoices = $derived(boardColumns.map((column) => column.label || column.header));
 	const legacyBoardEntries = $derived(orphanBoardEntries(boardEntries as BoardEntryLike[]));
 
 	const STATUS_COLORS: Record<string, string> = {
@@ -828,21 +834,15 @@
 
 	async function correctBoardEntry(entry: BoardEntry, patch: Partial<BoardEntry>) {
 		const body = {
+			sessionId: data.session.id,
 			unitName: entry.unitName,
 			division: patch.division ?? entry.division,
 			assignment: patch.assignment ?? entry.assignment,
 			status: patch.status ?? entry.status,
 			radioMessageId: lastRadioMessageId ?? undefined
 		};
-		const resp = await fetch(`/api/trainer/sessions/${data.session.id}/board/correct`, {
-			method: 'POST',
-			credentials: 'include',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
-		});
-		if (resp.ok) {
-			addTimelineEvent('FIX', `Corrected ${entry.unitName}`);
-		}
+		socket?.emit('trainer:board:correct', body);
+		addTimelineEvent('FIX', `Corrected ${entry.unitName}`);
 	}
 
 	let editingEntry = $state<BoardEntry | null>(null);
@@ -859,8 +859,6 @@
 		'Available',
 		'Out of Service'
 	];
-	const DIVISION_CHOICES = ['Basement', 'Div 1', 'Div 2', 'Div 3', 'Roof', 'RIC', 'Med', 'Reserve'];
-
 	function openEdit(entry: BoardEntry) {
 		editingEntry = entry;
 		editDivision = entry.division;
@@ -893,11 +891,40 @@
 		await correctBoardEntry(entry, { status });
 	}
 
-	function openDispatchSheet(unitName: string, division = 'Div 1') {
+	function openDispatchSheet(unitName: string, division = boardColumnChoices[0] ?? 'Working Assignments') {
 		dispatchUnitName = unitName;
 		dispatchDivision = division;
 		dispatchAssignment = '';
 		dispatchSheetOpen = true;
+	}
+
+	function configureBoardColumn(col: BoardColumnState) {
+		if (col.isFixed) return;
+		const label = prompt('Division/group label', col.label || '');
+		if (label === null) return;
+		if (!label.trim()) {
+			socket?.emit('board:clear-column', { sessionId: data.session.id, slotIndex: col.slotIndex });
+			return;
+		}
+		const kind = confirm('Is this a geographic division? Choose Cancel for a task group.')
+			? 'division'
+			: 'group';
+		socket?.emit('board:rename-column', {
+			sessionId: data.session.id,
+			slotIndex: col.slotIndex,
+			label: label.trim(),
+			kind
+		});
+		const supervisorUnit = prompt('Supervisor unit (optional)', col.supervisorUnit ?? '');
+		if (supervisorUnit?.trim()) {
+			socket?.emit('board:set-column-supervisor', {
+				sessionId: data.session.id,
+				slotIndex: col.slotIndex,
+				unitName: supervisorUnit.trim(),
+				kind,
+				label: label.trim()
+			});
+		}
 	}
 
 	async function submitDispatch() {
@@ -1010,11 +1037,18 @@
 
 		socket?.on(
 			'trainer:board:updated',
-			(payload: { entry?: Partial<BoardEntry> & { unitName: string } }) => {
+			(payload: { entry?: Partial<BoardEntry> & { unitName: string }; entries?: BoardEntry[]; boardColumns?: BoardColumnState[] }) => {
+				if (payload.entries) {
+					boardEntries = payload.entries;
+					boardColumns = buildBoardColumns(payload.boardColumns);
+					if (activeMobileTab !== 'board') boardHasNew = true;
+					return;
+				}
 				const entry = payload.entry;
 				if (!entry) return;
 				const mapped: BoardEntry = {
 					id: entry.id ?? crypto.randomUUID(),
+					slotIndex: entry.slotIndex ?? null,
 					division: entry.division ?? 'Unassigned',
 					unitName: entry.unitName,
 					assignment: entry.assignment ?? '',
@@ -1022,6 +1056,13 @@
 				};
 				boardEntries = [...boardEntries.filter((e) => e.unitName !== mapped.unitName), mapped];
 				if (activeMobileTab !== 'board') boardHasNew = true;
+			}
+		);
+		socket?.on(
+			'trainer:board:snapshot',
+			(payload: { boardEntries?: BoardEntry[]; boardColumns?: BoardColumnState[] }) => {
+				boardEntries = payload.boardEntries ?? boardEntries;
+				boardColumns = buildBoardColumns(payload.boardColumns);
 			}
 		);
 
@@ -1072,6 +1113,7 @@
 		socket?.off('trainer:session:paused');
 		socket?.off('trainer:session:resumed');
 		socket?.off('trainer:board:updated');
+		socket?.off('trainer:board:snapshot');
 		socket?.off('trainer:board:removed');
 		socket?.off('trainer:board:status-changed');
 		socket?.off('trainer:session:ended', goToReview);
@@ -1082,7 +1124,7 @@
 	});
 </script>
 
-<div class="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-background">
+<div class="flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
 	<header
 		class="hidden flex-col gap-3 border-b px-4 py-3 lg:flex lg:flex-row lg:items-center lg:justify-between"
 	>
@@ -1302,7 +1344,7 @@
 		{/if}
 	{:else}
 		<div class="hidden min-h-0 flex-1 overflow-hidden lg:flex lg:flex-row">
-			<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-none">
+			<main class="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:order-0">
 				<!-- Scene: intrinsic aspect when known so overlay/cover fill the viewport without letterboxing -->
 				<div class="flex shrink-0 justify-center border-b bg-muted/30 px-2 py-2">
 					<div bind:clientWidth={desktopSceneShelfW} class="w-full shrink-0">
@@ -1381,21 +1423,27 @@
 					</div>
 
 					<div class="min-h-0 flex-1 overflow-hidden px-1 py-1.5">
-						<div
-							class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1 lg:mx-0 lg:overflow-x-hidden lg:pb-0"
-						>
-							<div class="flex h-full min-h-[120px] w-max gap-0.5 lg:w-full lg:min-w-0">
-								{#each COMMAND_BOARD_COLUMNS as col (col.key)}
+						<div class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1">
+							<div class="flex h-full min-h-[120px] w-max gap-0.5">
+								{#each boardColumns as col (col.key)}
 									<div
-										class="flex min-h-0 w-[4.75rem] shrink-0 flex-col border bg-muted/20 sm:w-[5.25rem] lg:w-0 lg:min-w-0 lg:flex-1"
+										class="flex min-h-0 w-19 shrink-0 flex-col border sm:w-21 {col.colorClass}"
 									>
-										<div
-											class="flex min-h-[2rem] shrink-0 items-center justify-center border-b bg-muted/50 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
+										<button
+											type="button"
+											onclick={() => configureBoardColumn(col)}
+											disabled={col.isFixed}
+											class="flex min-h-8 shrink-0 flex-col items-center justify-center border-b bg-white/45 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
 										>
-											{col.header || '\u00a0'}
-										</div>
+											<span>{col.header || '\u00a0'}</span>
+											{#if col.supervisorUnit}
+												<span class="mt-0.5 rounded bg-white/70 px-1 text-[7px] normal-case">
+													SUP: {col.supervisorUnit}
+												</span>
+											{/if}
+										</button>
 										<div class="min-h-0 flex-1 space-y-1 overflow-y-auto p-1">
-											{#each entriesForColumn(boardEntries as BoardEntryLike[], col.key) as entry (entry.id ?? entry.unitName)}
+											{#each entriesForColumn(boardEntries as BoardEntryLike[], col) as entry (entry.id ?? entry.unitName)}
 												<button
 													type="button"
 													onclick={() => openEdit(entry as BoardEntry)}
@@ -1436,7 +1484,7 @@
 			</main>
 
 			<aside
-				class="order-2 flex max-h-[min(40vh,360px)] min-h-[180px] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-background lg:order-none lg:max-h-none lg:min-h-0 lg:w-64 lg:border-t-0 lg:border-l"
+				class="order-2 flex max-h-[min(40vh,360px)] min-h-[180px] w-full shrink-0 flex-col overflow-hidden border-t border-border bg-background lg:order-0 lg:max-h-none lg:min-h-0 lg:w-64 lg:border-t-0 lg:border-l"
 			>
 				<div class="flex flex-col items-center gap-2 border-b p-3">
 					<h3 class="text-xs font-semibold">Radio — Push to Talk</h3>
@@ -1671,8 +1719,8 @@
 						</div>
 					{:else}
 						<div class="space-y-3">
-							{#each COMMAND_BOARD_COLUMNS as col (col.key)}
-								{@const colEntries = entriesForColumn(boardEntries as BoardEntryLike[], col.key)}
+							{#each boardColumns as col (col.key)}
+								{@const colEntries = entriesForColumn(boardEntries as BoardEntryLike[], col)}
 								{#if colEntries.length > 0}
 									<div class="overflow-hidden rounded-xl border bg-card">
 										<div
@@ -1681,7 +1729,10 @@
 											<span
 												class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
 											>
-												{col.header || col.key}
+												{col.header}
+												{#if col.supervisorUnit}
+													<span class="normal-case"> · SUP: {col.supervisorUnit}</span>
+												{/if}
 											</span>
 											<span class="text-[10px] text-muted-foreground"
 												>{colEntries.length} unit{colEntries.length === 1 ? '' : 's'}</span
@@ -1727,7 +1778,7 @@
 								onclick={() => (addDivisionSheetOpen = true)}
 								class="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							>
-								<PlusIcon class="h-4 w-4" /> Add to a division
+								<PlusIcon class="h-4 w-4" /> Add to a board box
 							</button>
 
 							{#if legacyBoardEntries.length > 0}
@@ -1965,9 +2016,9 @@
 			</Sheet.Header>
 			<div class="space-y-3 px-4">
 				<div>
-					<label for="edit-division" class="mb-1 block text-xs font-medium">Division</label>
+					<label for="edit-division" class="mb-1 block text-xs font-medium">Board box</label>
 					<div class="flex flex-wrap gap-1.5">
-						{#each DIVISION_CHOICES as d (d)}
+						{#each boardColumnChoices as d (d)}
 							<button
 								type="button"
 								onclick={() => (editDivision = d)}
@@ -2041,14 +2092,14 @@
 			<Sheet.Header class="text-left">
 				<Sheet.Title class="text-base">Dispatch {dispatchUnitName}</Sheet.Title>
 				<Sheet.Description class="text-xs">
-					Pick a division and assignment.
+					Pick a board box and assignment.
 				</Sheet.Description>
 			</Sheet.Header>
 			<div class="space-y-3 px-4">
 				<div>
-					<p class="mb-1 text-xs font-medium">Division</p>
+					<p class="mb-1 text-xs font-medium">Board box</p>
 					<div class="flex flex-wrap gap-1.5">
-						{#each DIVISION_CHOICES as d (d)}
+						{#each boardColumnChoices as d (d)}
 							<button
 								type="button"
 								onclick={() => (dispatchDivision = d)}
@@ -2096,13 +2147,13 @@
 		</Sheet.Content>
 	</Sheet.Root>
 
-	<!-- Add to division sheet (mobile board "+ Add division") -->
+	<!-- Add to board box sheet (mobile board "+ Add board box") -->
 	<Sheet.Root bind:open={addDivisionSheetOpen}>
 		<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
 			<Sheet.Header class="text-left">
-				<Sheet.Title class="text-base">Add a unit to a division</Sheet.Title>
+				<Sheet.Title class="text-base">Add a unit to a board box</Sheet.Title>
 				<Sheet.Description class="text-xs">
-					Pick a division, then choose an available unit to dispatch.
+					Pick a board box, then choose an available unit to dispatch.
 				</Sheet.Description>
 			</Sheet.Header>
 			<div class="space-y-3 px-4">
@@ -2114,9 +2165,9 @@
 					</p>
 				{:else}
 					<div>
-						<p class="mb-1 text-xs font-medium">Division</p>
+						<p class="mb-1 text-xs font-medium">Board box</p>
 						<div class="flex flex-wrap gap-1.5">
-							{#each DIVISION_CHOICES as d (d)}
+							{#each boardColumnChoices as d (d)}
 								<button
 									type="button"
 									onclick={() => (dispatchDivision = d)}

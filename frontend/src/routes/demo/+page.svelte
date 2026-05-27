@@ -17,9 +17,10 @@
 	import { preloadSpritesheetPacks } from '$lib/components/scene-editor/konva-overlay-editor/spritesheet-cache';
 	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
 	import {
-		COMMAND_BOARD_COLUMNS,
+		buildBoardColumns,
 		entriesForColumn,
-		formatUnitAssignmentLine
+		formatUnitAssignmentLine,
+		type BoardColumnState
 	} from '$lib/trainer-command-board';
 	import { defaultOgImageUrl, toCanonicalUrl, toJsonLd } from '$lib/seo';
 	import {
@@ -28,8 +29,7 @@
 		TEAM_ACCESS_HREF
 	} from '$lib/landing/landing-content';
 	import {
-		DEMO_MAX_CLIP_SECONDS,
-		DEMO_MAX_RADIO_SECONDS
+		DEMO_MAX_CLIP_SECONDS
 	} from '$lib/demo/constants';
 	import { saveDemoReplay } from '$lib/demo/replay-storage';
 	import MicIcon from '@lucide/svelte/icons/mic';
@@ -46,6 +46,7 @@
 
 	interface DemoBoardEntry {
 		id: string;
+		slotIndex?: number | null;
 		division: string;
 		unitName: string;
 		assignment: string;
@@ -137,7 +138,6 @@
 		Available: 'bg-gray-100 text-gray-600',
 		'Out of Service': 'bg-red-100 text-red-700'
 	};
-	const DIVISION_CHOICES = ['Basement', 'Div 1', 'Div 2', 'Div 3', 'Roof', 'RIC', 'Med', 'Reserve'];
 	const ASSIGNMENT_SUGGESTIONS = [
 		'search',
 		'vent',
@@ -331,6 +331,8 @@
 	let currentStage = $state<StageKey>('incipient');
 	let currentSide = $state<SideKey>('alpha');
 	let boardEntries = $state<DemoBoardEntry[]>([]);
+	let boardColumns = $state<BoardColumnState[]>(buildBoardColumns());
+	const boardColumnChoices = $derived(boardColumns.map((column) => column.label || column.header));
 	let availableUnits = $state<string[]>(initialAvailableUnits());
 	let firedScriptEventIds = $state<string[]>([]);
 	let dispatchSheetOpen = $state(false);
@@ -338,7 +340,7 @@
 	let sessionEnded = $state(false);
 	let sessionStartedAt = $state<string | null>(null);
 	let dispatchUnitName = $state('');
-	let dispatchDivision = $state('Div 1');
+	let dispatchDivision = $state('Working Assignments');
 	let dispatchAssignment = $state('');
 	let editingEntry = $state<DemoBoardEntry | null>(null);
 	let editDivision = $state('');
@@ -349,7 +351,7 @@
 		{
 			id: 'intro',
 			type: 'INFO',
-			text: 'Press Start Scenario to begin the free self-paced command simulation.',
+			text: 'Scenario loading. Hold the mic to talk on the radio once live.',
 			time: '00:00'
 		}
 	]);
@@ -387,10 +389,6 @@
 		return DEFAULT_SCENARIO_SECONDS;
 	});
 	const timeLimitLabel = $derived(formatClock(scenarioTimeLimitSeconds));
-	const radioRemainingSeconds = $derived(
-		Math.max(0, DEMO_MAX_RADIO_SECONDS - radioSecondsUsed)
-	);
-	const radioLimitReached = $derived(radioRemainingSeconds <= 0);
 	const visibleScenarioResources = $derived(scriptedArrivalResources());
 	const hasPendingScriptedArrivals = $derived(
 		visibleScenarioResources.some(
@@ -640,11 +638,15 @@
 			error?: string;
 			transcript?: string;
 			actions?: Array<{
+				id?: string;
+				slotIndex?: number | null;
 				unitName: string;
 				division: string;
 				assignment: string;
 				status: string;
 			}>;
+			boardEntries?: DemoBoardEntry[];
+			boardColumns?: BoardColumnState[];
 			sizeUpText?: string | null;
 		} = {};
 		try {
@@ -668,14 +670,20 @@
 		if (result.sizeUpText) {
 			addTimelineEvent('SIZE-UP', result.sizeUpText);
 		}
-		if (result.actions && result.actions.length > 0) {
+		if (result.boardColumns) boardColumns = buildBoardColumns(result.boardColumns);
+		if (result.boardEntries && result.boardEntries.length > 0) {
+			boardEntries = result.boardEntries;
+			availableUnits = availableUnits.filter(
+				(unit) => !result.boardEntries?.some((entry) => entry.unitName === unit)
+			);
+		} else if (result.actions && result.actions.length > 0) {
 			applyRadioActions(result.actions);
 		}
 	}
 
 	async function startRecording(): Promise<void> {
 		radioError = null;
-		if (!hasStarted || sessionEnded || isProcessing || isArmingMic || radioLimitReached) return;
+		if (!hasStarted || sessionEnded || isProcessing || isArmingMic) return;
 		if (mediaRecorder?.state === 'recording') return;
 
 		pttHeld = true;
@@ -727,11 +735,6 @@
 					DEMO_MAX_CLIP_SECONDS,
 					Math.max(1, Math.ceil((Date.now() - startedAt) / 1000))
 				);
-				if (radioSecondsUsed + clipSeconds > DEMO_MAX_RADIO_SECONDS) {
-					radioError = `Free demo radio limit reached (${DEMO_MAX_RADIO_SECONDS}s total). Create an account for unlimited radio.`;
-					isRecording = false;
-					return;
-				}
 
 				isProcessing = true;
 				try {
@@ -745,13 +748,9 @@
 				}
 			};
 
-			const remainingClipSeconds = Math.min(
-				DEMO_MAX_CLIP_SECONDS,
-				radioRemainingSeconds
-			);
 			clipLimitTimer = setTimeout(() => {
 				if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
-			}, remainingClipSeconds * 1000);
+			}, DEMO_MAX_CLIP_SECONDS * 1000);
 
 			mediaRecorder.start(PTT_TIMESLICE_MS);
 			isRecording = true;
@@ -874,6 +873,7 @@
 		currentStage = 'incipient';
 		currentSide = 'alpha';
 		boardEntries = [];
+		boardColumns = buildBoardColumns();
 		availableUnits = initialAvailableUnits();
 		firedScriptEventIds = [];
 		dispatchSheetOpen = false;
@@ -894,7 +894,7 @@
 			{
 				id: 'intro',
 				type: 'INFO',
-				text: 'Press Start Scenario to begin the free self-paced command simulation.',
+				text: 'Scenario loading. Hold the mic to talk on the radio once live.',
 				time: '00:00'
 			}
 		];
@@ -927,7 +927,7 @@
 		resetDemoState();
 	}
 
-	function openDispatchSheet(unitName: string, division = 'Div 1'): void {
+	function openDispatchSheet(unitName: string, division = boardColumnChoices[0] ?? 'Working Assignments'): void {
 		dispatchUnitName = unitName;
 		dispatchDivision = division;
 		dispatchAssignment = '';
@@ -1050,6 +1050,7 @@
 			teardownViewportResize = () => window.removeEventListener('resize', onResize);
 		}
 		void warmScenarioMedia();
+		handleStartDemo();
 	});
 </script>
 
@@ -1089,9 +1090,8 @@
 					</h1>
 					<p class="mt-4 text-sm leading-6 text-muted-foreground sm:mt-5 sm:text-lg sm:leading-7">
 						Work the incident with radio traffic, unit assignments, changing conditions, and
-						after-action review. No account required to start. Push-to-talk radio is included
-						({DEMO_MAX_CLIP_SECONDS}s max per transmission, {DEMO_MAX_RADIO_SECONDS}s total in the
-						free demo).
+						after-action review. No account required. Push-to-talk radio is included
+						({DEMO_MAX_CLIP_SECONDS}s max per transmission).
 					</p>
 				</header>
 
@@ -1267,7 +1267,7 @@
 										</p>
 									{/if}
 									<p class="text-xs text-muted-foreground">
-										Tap a unit to manually assign a division and assignment, or use push-to-talk
+										Tap a unit to manually assign a board box and assignment, or use push-to-talk
 										radio below.
 									</p>
 								</div>
@@ -1312,7 +1312,7 @@
 										<div class="rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center">
 											<p class="text-sm font-medium">No units assigned yet</p>
 											<p class="mt-1 text-xs text-muted-foreground">
-												Tap an available unit or choose a division below.
+												Tap an available unit or choose a board box below.
 											</p>
 										</div>
 									{/if}
@@ -1321,10 +1321,10 @@
 										<p
 											class="mb-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
 										>
-											Quick add to division
+											Quick add to board box
 										</p>
 										<div class="grid grid-cols-2 gap-2">
-											{#each DIVISION_CHOICES as division (division)}
+											{#each boardColumnChoices as division (division)}
 												<button
 													type="button"
 													disabled={availableUnits.length === 0}
@@ -1342,15 +1342,15 @@
 								</div>
 								<div class="hidden overflow-x-auto p-2 sm:block">
 									<div class="flex min-w-[760px] gap-1">
-										{#each COMMAND_BOARD_COLUMNS as column (column.key)}
-											<div class="min-h-40 w-24 rounded border bg-muted/20">
+										{#each boardColumns as column (column.key)}
+											<div class="min-h-40 w-24 rounded border {column.colorClass}">
 												<div
 													class="flex min-h-8 items-center justify-center border-b bg-muted/40 px-1 text-[10px] leading-tight font-semibold tracking-wide text-muted-foreground uppercase"
 												>
-													{column.header || 'Reserve'}
+													{column.header}
 												</div>
 												<div class="space-y-1 p-1">
-													{#each entriesForColumn(boardEntries, column.key) as entry (entry.id)}
+													{#each entriesForColumn(boardEntries, column) as entry (entry.id)}
 														<div class="rounded border bg-card text-[10px] leading-tight">
 															<button
 																type="button"
@@ -1377,7 +1377,7 @@
 															disabled={availableUnits.length === 0}
 															onclick={() => {
 																const unitName = availableUnits[0];
-																if (unitName) openDispatchSheet(unitName, column.key);
+																if (unitName) openDispatchSheet(unitName, column.label || column.header);
 															}}
 															class="min-h-9 w-full rounded border border-dashed px-1.5 py-1 text-[10px] leading-tight text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
 														>
@@ -1449,7 +1449,7 @@
 											onpointerup={onPttPointerUp}
 											onpointercancel={onPttPointerUp}
 											onlostpointercapture={onPttPointerUp}
-											disabled={!hasStarted || sessionEnded || isProcessing || radioLimitReached}
+											disabled={!hasStarted || sessionEnded || isProcessing}
 											class="relative flex h-16 w-16 touch-none items-center justify-center rounded-full border-4 transition-all select-none disabled:cursor-not-allowed disabled:opacity-50 {isRecording
 												? 'scale-110 border-red-500 bg-red-500'
 												: 'border-red-300 bg-red-500/80 hover:bg-red-500'}"
@@ -1461,9 +1461,7 @@
 									</div>
 									<div class="min-w-0">
 										<p class="text-xs font-medium text-foreground">
-											{radioLimitReached
-												? 'Free demo radio limit reached.'
-												: `${radioRemainingSeconds}s radio remaining (${DEMO_MAX_CLIP_SECONDS}s max per clip).`}
+											{DEMO_MAX_CLIP_SECONDS}s max per transmission.
 										</p>
 										<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
 											{isArmingMic
@@ -1537,14 +1535,14 @@
 				<Sheet.Header class="text-left">
 					<Sheet.Title class="text-base">Dispatch {dispatchUnitName}</Sheet.Title>
 					<Sheet.Description class="text-xs">
-						Pick a division and assignment. This updates the demo board locally.
+						Pick a board box and assignment. This updates the demo board locally.
 					</Sheet.Description>
 				</Sheet.Header>
 				<div class="space-y-3 px-4">
 					<div>
 						<p class="mb-1 text-xs font-medium">Division</p>
 						<div class="flex flex-wrap gap-1.5">
-							{#each DIVISION_CHOICES as division (division)}
+							{#each boardColumnChoices as division (division)}
 								<button
 									type="button"
 									onclick={() => (dispatchDivision = division)}
@@ -1615,7 +1613,7 @@
 					<div>
 						<p class="mb-1 text-xs font-medium">Division</p>
 						<div class="flex flex-wrap gap-1.5">
-							{#each DIVISION_CHOICES as division (division)}
+							{#each boardColumnChoices as division (division)}
 								<button
 									type="button"
 									onclick={() => (editDivision = division)}

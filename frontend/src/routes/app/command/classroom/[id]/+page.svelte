@@ -12,9 +12,11 @@
 	} from '$lib/components/scene-editor/konva-overlay-editor/overlay-utils';
 	import type { AnimationOverlay } from '$lib/components/scene-editor/konva-overlay-editor/overlay-types';
 	import {
-		COMMAND_BOARD_COLUMNS,
+		buildBoardColumns,
+		commandBoardHeader,
 		entriesForColumn,
 		formatUnitAssignmentLine,
+		type BoardColumnState,
 		type BoardEntryLike
 	} from '$lib/trainer-command-board';
 	import type { ActionData, PageData } from './$types';
@@ -29,6 +31,7 @@
 
 	interface BoardEntry {
 		id: string;
+		slotIndex?: number | null;
 		division: string;
 		unitName: string;
 		assignment: string | null;
@@ -108,7 +111,11 @@
 	let activeScenario = $state<ScenarioSnapshot | null>(data.activeScenario ?? null);
 	let participants = $state<Participant[]>(data.participants);
 	let boardEntries = $state<BoardEntry[]>(data.boardEntries);
+	let boardColumns = $state<BoardColumnState[]>(buildBoardColumns(data.boardColumns));
 	let calledOnParticipantId = $state<string | null>(data.classroom.calledOnParticipantId);
+	let useSelfPacedScript = $state(data.classroom.useSelfPacedScript);
+	let savedUseSelfPacedScript = $state(data.classroom.useSelfPacedScript);
+	const optionsDirty = $derived(useSelfPacedScript !== savedUseSelfPacedScript);
 	let currentStage = $state(data.activeSession?.activeStage ?? 'incipient');
 	let currentSide = $state(data.activeSession?.activeSide ?? 'alpha');
 	let isLoadingScenario = $state(false);
@@ -123,7 +130,10 @@
 	let asideTab = $state<'roster' | 'comms'>('roster');
 
 	const hasStarted = $derived(Boolean(activeSession?.hasStarted));
+	const selectedScenario = $derived(data.scenarios.find((scenario) => scenario.id === selectedScenarioId));
+	const selectedScenarioHasScript = $derived(Boolean(selectedScenario?.selfPacedConfigJson));
 	const isSelfPacedScenario = $derived(Boolean(activeScenario?.selfPacedConfigJson));
+	const isSelfPacedScriptActive = $derived(isSelfPacedScenario && useSelfPacedScript);
 	const calledOnParticipant = $derived(
 		participants.find((participant) => participant.id === calledOnParticipantId) ?? null
 	);
@@ -221,6 +231,35 @@
 		socket?.emit('classroom:save-session', { classroomId: data.classroom.id });
 	}
 
+	function configureBoardColumn(col: BoardColumnState) {
+		if (col.isFixed || !activeSession?.id) return;
+		const label = prompt('Division/group label', col.label || '');
+		if (label === null) return;
+		if (!label.trim()) {
+			socket?.emit('board:clear-column', { sessionId: activeSession.id, slotIndex: col.slotIndex });
+			return;
+		}
+		const kind = confirm('Is this a geographic division? Choose Cancel for a task group.')
+			? 'division'
+			: 'group';
+		socket?.emit('board:rename-column', {
+			sessionId: activeSession.id,
+			slotIndex: col.slotIndex,
+			label: label.trim(),
+			kind
+		});
+		const supervisorUnit = prompt('Supervisor unit (optional)', col.supervisorUnit ?? '');
+		if (supervisorUnit?.trim()) {
+			socket?.emit('board:set-column-supervisor', {
+				sessionId: activeSession.id,
+				slotIndex: col.slotIndex,
+				unitName: supervisorUnit.trim(),
+				kind,
+				label: label.trim()
+			});
+		}
+	}
+
 	function endClassroom() {
 		if (isEndingClassroom) return;
 		if (!confirm('End this classroom? Students will be shown that the session has ended.')) return;
@@ -293,7 +332,12 @@
 			activeScenario = (payload.scenario ?? null) as ScenarioSnapshot | null;
 			participants = payload.participants ?? participants;
 			boardEntries = payload.boardEntries ?? [];
+			boardColumns = buildBoardColumns(payload.boardColumns);
 			calledOnParticipantId = payload.calledOnParticipantId ?? null;
+			if (payload.useSelfPacedScript !== undefined) {
+				useSelfPacedScript = payload.useSelfPacedScript;
+				savedUseSelfPacedScript = payload.useSelfPacedScript;
+			}
 			currentStage = payload.activeSession?.activeStage ?? currentStage;
 			currentSide = payload.activeSession?.activeSide ?? currentSide;
 			if (payload.activeSession?.hasStarted && payload.activeSession?.startedAt) {
@@ -309,7 +353,8 @@
 			activeScenario = (payload.scenario ?? null) as ScenarioSnapshot | null;
 			currentStage = payload.session?.activeStage ?? 'incipient';
 			currentSide = payload.session?.activeSide ?? 'alpha';
-			boardEntries = [];
+			boardEntries = payload.boardEntries ?? [];
+			boardColumns = buildBoardColumns(payload.boardColumns);
 			sessionSeconds = 0;
 			timelineEvents = [];
 			statusMessage = 'Scenario loaded — press Start when ready';
@@ -335,6 +380,7 @@
 			activeSession = null;
 			activeScenario = null;
 			boardEntries = [];
+			boardColumns = buildBoardColumns();
 			calledOnParticipantId = null;
 			sessionSeconds = 0;
 			statusMessage = 'Scenario ended';
@@ -368,7 +414,13 @@
 			if (payload.hazard) addTimelineEvent('HAZARD', payload.hazard, eventSeconds);
 			if (payload.update) addTimelineEvent('UPDATE', payload.update, eventSeconds);
 		});
-		socket.on('trainer:board:updated', (payload: { entry?: BoardEntry }) => {
+		socket.on('trainer:board:updated', (payload: { entry?: BoardEntry; entries?: BoardEntry[]; boardColumns?: BoardColumnState[] }) => {
+			if (payload.entries) {
+				boardEntries = payload.entries;
+				boardColumns = buildBoardColumns(payload.boardColumns);
+				if (payload.entry) addTimelineEvent('BOARD', formatBoardTimelineLine(payload.entry));
+				return;
+			}
 			const entry = payload.entry;
 			if (!entry?.unitName) return;
 			boardEntries = boardEntries.some((item) => item.unitName === entry.unitName)
@@ -445,13 +497,17 @@
 				<span class="shrink-0 font-mono text-xs text-muted-foreground sm:text-sm">
 					{formatClock(sessionSeconds)}
 				</span>
-				{#if isSelfPacedScenario}
+				{#if isSelfPacedScriptActive}
 					<Badge variant="outline" class="shrink-0">Self-paced script</Badge>
+				{:else if isSelfPacedScenario}
+					<Badge variant="outline" class="shrink-0">Script off</Badge>
 				{/if}
 			{:else if activeSession}
 				<Badge variant="secondary" class="shrink-0">Loaded</Badge>
-				{#if isSelfPacedScenario}
+				{#if isSelfPacedScriptActive}
 					<Badge variant="outline" class="shrink-0">Self-paced script</Badge>
+				{:else if isSelfPacedScenario}
+					<Badge variant="outline" class="shrink-0">Script off</Badge>
 				{/if}
 			{:else}
 				<Badge variant="secondary" class="shrink-0">Idle</Badge>
@@ -501,7 +557,8 @@
 				size="sm"
 				class="min-h-9"
 				onclick={loadScenario}
-				disabled={!selectedScenarioId || isLoadingScenario}
+				disabled={!selectedScenarioId || isLoadingScenario || optionsDirty}
+				title={optionsDirty ? 'Save class options before loading a simulation' : undefined}
 			>
 				{isLoadingScenario ? 'Loading…' : activeSession ? 'Swap simulation' : 'Load simulation'}
 			</Button>
@@ -510,7 +567,8 @@
 					size="sm"
 					class="min-h-9 bg-green-600 text-white hover:bg-green-600/90"
 					onclick={startScenario}
-					disabled={isStartingScenario}
+					disabled={isStartingScenario || optionsDirty}
+					title={optionsDirty ? 'Save class options before starting' : undefined}
 				>
 					{isStartingScenario ? 'Starting…' : 'Start simulation'}
 				</Button>
@@ -539,6 +597,71 @@
 			<span class="hidden text-xs text-muted-foreground sm:inline">{statusMessage}</span>
 		</div>
 	</div>
+
+	{#if !hasStarted}
+		<form
+			method="POST"
+			action="?/updateOptions"
+			use:enhance={() => {
+				return async ({ result, update }) => {
+					await update();
+					if (result.type === 'success') {
+						savedUseSelfPacedScript = useSelfPacedScript;
+					}
+				};
+			}}
+			class="shrink-0 border-b bg-background px-3 py-2 sm:px-4"
+		>
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+				<div>
+					<div class="flex flex-wrap items-center gap-2">
+						<p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+							Class options
+						</p>
+						{#if optionsDirty}
+							<Badge variant="outline" class="border-amber-300 bg-amber-50 text-amber-800">
+								Unsaved changes
+							</Badge>
+						{:else}
+							<Badge variant="outline" class="border-emerald-300 bg-emerald-50 text-emerald-800">
+								Saved
+							</Badge>
+						{/if}
+					</div>
+					<p class="mt-0.5 text-xs text-muted-foreground">
+						Set how this classroom runs before loading or starting the sim.
+					</p>
+				</div>
+				<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+					<label class="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+						<input
+							type="checkbox"
+							name="useSelfPacedScript"
+							bind:checked={useSelfPacedScript}
+							class="h-4 w-4 rounded border-border"
+						/>
+						<span>
+							Use self-paced script
+							{#if selectedScenarioHasScript}
+								<span class="text-xs text-muted-foreground">(selected sim has script)</span>
+							{:else}
+								<span class="text-xs text-muted-foreground">(no script on selected sim)</span>
+							{/if}
+						</span>
+					</label>
+					<Button
+						type="submit"
+						variant="outline"
+						size="sm"
+						class="min-h-9"
+						disabled={!optionsDirty}
+					>
+						Save options
+					</Button>
+				</div>
+			</div>
+		</form>
+	{/if}
 
 	{#if form?.error}
 		<div
@@ -623,7 +746,8 @@
 							<Button
 								class="min-h-12 px-6 text-base font-semibold"
 								onclick={startScenario}
-								disabled={isStartingScenario}
+								disabled={isStartingScenario || optionsDirty}
+								title={optionsDirty ? 'Save class options before starting' : undefined}
 							>
 								{isStartingScenario ? 'Starting…' : 'Start simulation'}
 							</Button>
@@ -764,19 +888,27 @@
 					{/if}
 
 					<div class="min-h-0 flex-1 overflow-hidden px-1 py-1.5">
-						<div class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1 lg:mx-0 lg:overflow-x-hidden lg:pb-0">
-							<div class="flex h-full min-h-[120px] w-max gap-0.5 lg:w-full lg:min-w-0">
-								{#each COMMAND_BOARD_COLUMNS as col (col.key)}
+						<div class="-mx-1 overflow-x-auto overflow-y-hidden px-1 pb-1">
+							<div class="flex h-full min-h-[120px] w-max gap-0.5">
+								{#each boardColumns as col (col.key)}
 									<div
-										class="flex min-h-0 w-19 shrink-0 flex-col border bg-muted/20 sm:w-21 lg:w-0 lg:min-w-0 lg:flex-1"
+										class="flex min-h-0 w-19 shrink-0 flex-col border sm:w-21 {col.colorClass}"
 									>
-										<div
-											class="flex min-h-8 shrink-0 items-center justify-center border-b bg-muted/50 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
+										<button
+											type="button"
+											onclick={() => configureBoardColumn(col)}
+											disabled={col.isFixed}
+											class="flex min-h-8 shrink-0 flex-col items-center justify-center border-b border-inherit bg-white/45 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
 										>
-											{col.header || '\u00a0'}
-										</div>
+											<span>{commandBoardHeader(col) || '\u00a0'}</span>
+											{#if col.supervisorUnit}
+												<span class="mt-0.5 rounded bg-white/70 px-1 text-[7px] normal-case">
+													SUP: {col.supervisorUnit}
+												</span>
+											{/if}
+										</button>
 										<div class="min-h-0 flex-1 space-y-1 overflow-y-auto p-1">
-											{#each entriesForColumn(boardEntries as BoardEntryLike[], col.key) as entry (entry.id ?? entry.unitName)}
+											{#each entriesForColumn(boardEntries as BoardEntryLike[], col) as entry (entry.id ?? entry.unitName)}
 												<div
 													class="w-full rounded border px-1.5 py-1 text-[9px] leading-tight font-medium {STATUS_COLORS[
 														entry.status

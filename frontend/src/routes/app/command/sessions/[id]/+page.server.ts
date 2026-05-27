@@ -28,5 +28,5 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const isSelfPaced = isValidSelfPacedConfig(scenario.selfPacedConfigJson);
 
-	return { session, scenario, boardEntries, isSelfPaced };
+	return { session, scenario, boardEntries, boardColumns: session.boardColumnsJson ?? [], isSelfPaced };
 };

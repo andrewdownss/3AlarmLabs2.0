@@ -1,8 +1,8 @@
-import { DEMO_MAX_CLIP_SECONDS, DEMO_MAX_RADIO_SECONDS } from '$lib/demo/constants';
+import { DEMO_MAX_CLIP_SECONDS } from '$lib/demo/constants';
 
 /** Shared free-demo radio limit copy — keep pricing, hero, and free scenario in sync */
 export const freeDemoRadioLimitShort = `${DEMO_MAX_CLIP_SECONDS}s max per radio transmission`;
-export const freeDemoRadioLimitDetail = `${DEMO_MAX_CLIP_SECONDS}s max per transmission, ${DEMO_MAX_RADIO_SECONDS}s total per run`;
+export const freeDemoRadioLimitDetail = `${DEMO_MAX_CLIP_SECONDS}s max per transmission`;
 
 export interface ValueProp {
 	title: string;

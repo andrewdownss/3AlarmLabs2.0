@@ -77,6 +77,7 @@ export const load: PageServerLoad = async ({ locals, params, parent }) => {
 					description: true,
 					alarmLevel: true,
 					sideAlphaImageUrl: true,
+					selfPacedConfigJson: true,
 					isLibrary: true
 				}
 			})
@@ -88,12 +89,31 @@ export const load: PageServerLoad = async ({ locals, params, parent }) => {
 		activeSession,
 		activeScenario,
 		boardEntries,
+		boardColumns: activeSession?.boardColumnsJson ?? [],
 		scenarios,
 		joinUrl: `/classroom/join?code=${classroom.code}`
 	};
 };
 
 export const actions: Actions = {
+	updateOptions: async ({ locals, params, request }) => {
+		if (!locals.user) throw redirect(303, '/login');
+		const classroom = await loadClassroom(params.id, locals.user.id);
+		if (!classroom) return fail(404, { error: 'Classroom not found.' });
+
+		const form = await request.formData();
+		const useSelfPacedScript = form.get('useSelfPacedScript') === 'on';
+		const rawBoardLabelMode = String(form.get('boardLabelMode') ?? 'division_group');
+		const boardLabelMode =
+			rawBoardLabelMode === 'student_defined' ? 'student_defined' : 'division_group';
+
+		await db
+			.update(classrooms)
+			.set({ useSelfPacedScript, boardLabelMode })
+			.where(eq(classrooms.id, classroom.id));
+
+		return { optionsSaved: true };
+	},
 	end: async ({ locals, params }) => {
 		if (!locals.user) throw redirect(303, '/login');
 		const classroom = await loadClassroom(params.id, locals.user.id);
