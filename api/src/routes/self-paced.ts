@@ -9,7 +9,8 @@ import {
 	trainerSessionEvents,
 	trainerSessions,
 	trainerRadioMessages,
-	trainerCommandBoardEntries
+	trainerCommandBoardEntries,
+	classrooms
 } from '../db/schema/trainer.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { getSessionForUser } from '../middleware/authz.js';
@@ -289,13 +290,17 @@ export function startSelfPacedPoller(io: Server, intervalMs = 2000): NodeJS.Time
 				.select({ id: trainerSessions.id })
 				.from(trainerSessions)
 				.leftJoin(trainerScenarios, eq(trainerSessions.scenarioId, trainerScenarios.id))
+				.leftJoin(classrooms, eq(trainerSessions.classroomId, classrooms.id))
 				.where(
 					and(
 						eq(trainerSessions.hasStarted, true),
 						isNull(trainerSessions.endedAt),
 						or(
 							ne(trainerSessions.mode, 'classroom'),
-							isNotNull(trainerScenarios.selfPacedConfigJson)
+							and(
+								eq(classrooms.useSelfPacedScript, true),
+								isNotNull(trainerScenarios.selfPacedConfigJson)
+							)
 						)
 					)
 				);

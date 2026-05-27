@@ -5,7 +5,6 @@ import {
 	classroomParticipants,
 	classrooms,
 	organizations,
-	trainerCommandBoardEntries,
 	trainerScenarios,
 	trainerSessionEvents,
 	trainerSessions
@@ -13,6 +12,7 @@ import {
 import { maxClassroomSeatsForPlan } from '../lib/plan-policy.js';
 import { parseSelfPacedConfig } from '../lib/self-paced.js';
 import { endSession, runTimelineTick } from '../lib/self-paced-runtime.js';
+import { loadBoardState } from '../lib/board-persistence.js';
 
 function getSocketUserId(socket: Socket): string | undefined {
 	return (socket as Socket & { userId?: string }).userId;
@@ -89,7 +89,7 @@ async function loadSnapshot(classroomId: string, includeParticipants: boolean) {
 	const activeSession = classroom.activeSessionId
 		? (await db.select().from(trainerSessions).where(eq(trainerSessions.id, classroom.activeSessionId)).limit(1))[0] ?? null
 		: null;
-	const [scenario, boardEntries, participants] = activeSession
+	const [scenario, boardState, participants] = activeSession
 		? await Promise.all([
 				db
 					.select()
@@ -97,21 +97,21 @@ async function loadSnapshot(classroomId: string, includeParticipants: boolean) {
 					.where(eq(trainerScenarios.id, activeSession.scenarioId))
 					.limit(1)
 					.then((rows) => rows[0] ?? null),
-				db
-					.select()
-					.from(trainerCommandBoardEntries)
-					.where(eq(trainerCommandBoardEntries.sessionId, activeSession.id)),
+				loadBoardState(activeSession.id),
 				includeParticipants ? loadParticipants(classroomId) : Promise.resolve([])
 			])
-		: [null, [], includeParticipants ? await loadParticipants(classroomId) : []];
+		: [null, { columns: [], entries: [] }, includeParticipants ? await loadParticipants(classroomId) : []];
 
 	return {
 		classroomId,
 		activeSession,
 		scenario,
-		boardEntries,
+		boardEntries: boardState.entries,
+		boardColumns: boardState.columns,
 		participants,
-		calledOnParticipantId: classroom.calledOnParticipantId
+		calledOnParticipantId: classroom.calledOnParticipantId,
+		useSelfPacedScript: classroom.useSelfPacedScript,
+		boardLabelMode: classroom.boardLabelMode
 	};
 }
 
@@ -242,6 +242,7 @@ export function registerClassroomHandlers(io: Server, socket: Socket) {
 			.where(eq(classrooms.id, classroom.id));
 
 		io.to(classroomRoom(classroom.id)).socketsJoin(sessionRoom(sessionId));
+		const boardState = await loadBoardState(sessionId);
 		io.to(classroomRoom(classroom.id)).emit('classroom:scenario-loaded', {
 			session: {
 				id: sessionId,
@@ -251,7 +252,9 @@ export function registerClassroomHandlers(io: Server, socket: Socket) {
 				hasStarted: false,
 				startedAt: null
 			},
-			scenario
+			scenario,
+			boardEntries: boardState.entries,
+			boardColumns: boardState.columns
 		});
 	});
 
@@ -288,7 +291,7 @@ export function registerClassroomHandlers(io: Server, socket: Socket) {
 			.from(trainerScenarios)
 			.where(eq(trainerScenarios.id, existing.scenarioId))
 			.limit(1);
-		if (parseSelfPacedConfig(scenarioRow?.config ?? null)) {
+		if (classroom.useSelfPacedScript && parseSelfPacedConfig(scenarioRow?.config ?? null)) {
 			await runTimelineTick(io, classroom.activeSessionId, now);
 		}
 	});

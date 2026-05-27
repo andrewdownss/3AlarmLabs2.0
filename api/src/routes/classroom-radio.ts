@@ -7,7 +7,6 @@ import { db } from '../db/index.js';
 import {
 	classroomParticipants,
 	classrooms,
-	trainerCommandBoardEntries,
 	trainerRadioMessages,
 	trainerScenarios,
 	trainerSessionEvents,
@@ -16,14 +15,10 @@ import {
 import { CLASSROOM_COOKIE_NAME, verifyClassroomCookieValue } from '../lib/classroom-cookie.js';
 import { transcribeAudio } from '../services/transcription.js';
 import { parseCommand } from '../services/command-parser.js';
-import {
-	extractAssignmentActions,
-	normalizeBoardColumn,
-	resolveSizeUpSummary,
-	shouldPlaceAssignment
-} from '../lib/trainer-board-columns.js';
+import { extractAssignmentActions, resolveSizeUpSummary } from '../lib/trainer-board-columns.js';
 import { endSession, evaluateAfterBoardChange } from '../lib/self-paced-runtime.js';
 import { isUnderControlDeclaration, parseSelfPacedConfig } from '../lib/self-paced.js';
+import { applyParsedCommandToBoard } from '../lib/board-persistence.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -143,54 +138,10 @@ export function createClassroomRadioRouter(io: Server) {
 		}
 
 		const actions = extractAssignmentActions(parsedCommand);
-		for (const action of actions) {
-			const boardColumn = normalizeBoardColumn(action);
-			if (!shouldPlaceAssignment(action, boardColumn)) continue;
-
-			const division = boardColumn!;
-			const unitName = String(action.unitName);
-			const assignment = String(action.assignment ?? '');
-			const location = String(action.location ?? '');
-			const status = String(action.status ?? 'Assigned').trim() || 'Assigned';
-
-			const existing = await db
-				.select()
-				.from(trainerCommandBoardEntries)
-				.where(
-					and(
-						eq(trainerCommandBoardEntries.sessionId, sessionId),
-						eq(trainerCommandBoardEntries.unitName, unitName)
-					)
-				)
-				.limit(1);
-
-			let entryId: string;
-			if (existing.length > 0) {
-				entryId = existing[0].id;
-				await db
-					.update(trainerCommandBoardEntries)
-					.set({ division, assignment, location, status, lastUpdatedAt: new Date() })
-					.where(eq(trainerCommandBoardEntries.id, entryId));
-			} else {
-				entryId = crypto.randomUUID();
-				await db.insert(trainerCommandBoardEntries).values({
-					id: entryId,
-					sessionId,
-					division,
-					unitName,
-					assignment,
-					location,
-					status
-				});
-			}
-
-			io.to(`session:${sessionId}`).emit('trainer:board:updated', {
-				entry: { id: entryId, sessionId, division, unitName, assignment, location, status }
-			});
-		}
+		const boardChanged = await applyParsedCommandToBoard(io, sessionId, parsedCommand);
 
 		io.to(`session:${sessionId}`).emit('trainer:radio:transcribed', { transcript, parsedCommand });
-		if (actions.length > 0) await evaluateAfterBoardChange(io, sessionId);
+		if (boardChanged || actions.length > 0) await evaluateAfterBoardChange(io, sessionId);
 
 		if (transcript && isUnderControlDeclaration(transcript)) {
 			const [scenarioRow] = await db

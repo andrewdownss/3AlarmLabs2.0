@@ -4,10 +4,13 @@ import { transcribeAudio } from '../services/transcription.js';
 import { parseCommand } from '../services/command-parser.js';
 import {
 	extractAssignmentActions,
+	extractSupervisorAssignmentActions,
 	normalizeBoardColumn,
+	normalizeBoardColumns,
 	resolveSizeUpSummary,
 	shouldPlaceAssignment
 } from '../lib/trainer-board-columns.js';
+import { applySupervisorAssignment, applyTaskAssignment } from '../services/board-engine.js';
 import {
 	DEMO_MAX_RADIO_UPLOAD_BYTES,
 	DEMO_RADIO_RATE_LIMIT_PER_MINUTE
@@ -70,17 +73,35 @@ export function createDemoRadioRouter() {
 			}
 		}
 
+		let boardColumns = normalizeBoardColumns([]);
+		let boardEntries: Array<{
+			id: string;
+			slotIndex?: number | null;
+			division: string;
+			unitName: string;
+			assignment: string | null;
+			location?: string | null;
+			status: string;
+		}> = [];
 		const actions = extractAssignmentActions(parsedCommand).map((action) => {
 			const boardColumn = normalizeBoardColumn(action);
 			if (!shouldPlaceAssignment(action, boardColumn)) return null;
-			return {
+			const result = applyTaskAssignment(boardColumns, boardEntries, {
 				unitName: String(action.unitName),
-				division: boardColumn!,
 				assignment: String(action.assignment ?? ''),
+				boardColumn,
 				location: String(action.location ?? ''),
 				status: String(action.status ?? 'Assigned').trim() || 'Assigned'
-			};
+			});
+			boardColumns = result.columns;
+			boardEntries = result.entries;
+			return result.entries.at(-1) ?? null;
 		}).filter((action): action is NonNullable<typeof action> => action !== null);
+		for (const supervisor of extractSupervisorAssignmentActions(parsedCommand)) {
+			const result = applySupervisorAssignment(boardColumns, boardEntries, supervisor);
+			boardColumns = result.columns;
+			boardEntries = result.entries;
+		}
 
 		const sizeUpText = resolveSizeUpSummary(parsedCommand, transcript);
 
@@ -88,6 +109,8 @@ export function createDemoRadioRouter() {
 			transcript,
 			parsedCommand,
 			actions,
+			boardColumns,
+			boardEntries,
 			sizeUpText: sizeUpText ?? null
 		});
 	});

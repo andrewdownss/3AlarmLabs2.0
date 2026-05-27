@@ -1,9 +1,10 @@
 import { and, count, desc, eq, gt, isNull, lte, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { classroomParticipants, classrooms, organizations, trainerCommandBoardEntries, trainerScenarios, trainerSessionEvents, trainerSessions } from '../db/schema/trainer.js';
+import { classroomParticipants, classrooms, organizations, trainerScenarios, trainerSessionEvents, trainerSessions } from '../db/schema/trainer.js';
 import { maxClassroomSeatsForPlan } from '../lib/plan-policy.js';
 import { parseSelfPacedConfig } from '../lib/self-paced.js';
 import { endSession, runTimelineTick } from '../lib/self-paced-runtime.js';
+import { loadBoardState } from '../lib/board-persistence.js';
 function getSocketUserId(socket) {
     return socket.userId;
 }
@@ -69,7 +70,7 @@ async function loadSnapshot(classroomId, includeParticipants) {
     const activeSession = classroom.activeSessionId
         ? (await db.select().from(trainerSessions).where(eq(trainerSessions.id, classroom.activeSessionId)).limit(1))[0] ?? null
         : null;
-    const [scenario, boardEntries, participants] = activeSession
+    const [scenario, boardState, participants] = activeSession
         ? await Promise.all([
             db
                 .select()
@@ -77,20 +78,20 @@ async function loadSnapshot(classroomId, includeParticipants) {
                 .where(eq(trainerScenarios.id, activeSession.scenarioId))
                 .limit(1)
                 .then((rows) => rows[0] ?? null),
-            db
-                .select()
-                .from(trainerCommandBoardEntries)
-                .where(eq(trainerCommandBoardEntries.sessionId, activeSession.id)),
+            loadBoardState(activeSession.id),
             includeParticipants ? loadParticipants(classroomId) : Promise.resolve([])
         ])
-        : [null, [], includeParticipants ? await loadParticipants(classroomId) : []];
+        : [null, { columns: [], entries: [] }, includeParticipants ? await loadParticipants(classroomId) : []];
     return {
         classroomId,
         activeSession,
         scenario,
-        boardEntries,
+        boardEntries: boardState.entries,
+        boardColumns: boardState.columns,
         participants,
-        calledOnParticipantId: classroom.calledOnParticipantId
+        calledOnParticipantId: classroom.calledOnParticipantId,
+        useSelfPacedScript: classroom.useSelfPacedScript,
+        boardLabelMode: classroom.boardLabelMode
     };
 }
 async function broadcastParticipants(io, classroomId) {
@@ -193,6 +194,7 @@ export function registerClassroomHandlers(io, socket) {
             .set({ activeSessionId: sessionId, calledOnParticipantId: null })
             .where(eq(classrooms.id, classroom.id));
         io.to(classroomRoom(classroom.id)).socketsJoin(sessionRoom(sessionId));
+        const boardState = await loadBoardState(sessionId);
         io.to(classroomRoom(classroom.id)).emit('classroom:scenario-loaded', {
             session: {
                 id: sessionId,
@@ -202,7 +204,9 @@ export function registerClassroomHandlers(io, socket) {
                 hasStarted: false,
                 startedAt: null
             },
-            scenario
+            scenario,
+            boardEntries: boardState.entries,
+            boardColumns: boardState.columns
         });
     });
     socket.on('classroom:start-scenario', async (data) => {
@@ -239,7 +243,7 @@ export function registerClassroomHandlers(io, socket) {
             .from(trainerScenarios)
             .where(eq(trainerScenarios.id, existing.scenarioId))
             .limit(1);
-        if (parseSelfPacedConfig(scenarioRow?.config ?? null)) {
+        if (classroom.useSelfPacedScript && parseSelfPacedConfig(scenarioRow?.config ?? null)) {
             await runTimelineTick(io, classroom.activeSessionId, now);
         }
     });

@@ -12,6 +12,7 @@ import { db } from "../db/index.js";
 import { trainerSessions, trainerSessionEvents } from "../db/schema/trainer.js";
 import { redis } from "../config/redis.js";
 import type { SelfPacedDispatchPayload } from "./self-paced.js";
+import { applyParsedCommandToBoard } from "./board-persistence.js";
 
 export const VALID_STAGES: ReadonlySet<string> = new Set([
   "incipient",
@@ -65,8 +66,17 @@ export async function applyStateDispatch(
     sanitized.hazard = payload.hazard.trim();
   if (payload.update && payload.update.trim())
     sanitized.update = payload.update.trim();
+  const assignments = Array.isArray(payload.assignments) ? payload.assignments : [];
+  const supervisorAssignments = Array.isArray(payload.supervisorAssignments)
+    ? payload.supervisorAssignments
+    : [];
 
-  if (Object.keys(sanitized).length === 0) return sanitized;
+  if (
+    Object.keys(sanitized).length === 0 &&
+    assignments.length === 0 &&
+    supervisorAssignments.length === 0
+  )
+    return sanitized;
 
   if (Object.keys(dbUpdates).length > 0) {
     await db
@@ -85,6 +95,8 @@ export async function applyStateDispatch(
     eventType,
     payloadJson: {
       ...sanitized,
+      assignments,
+      supervisorAssignments,
       source: options.source,
       ruleId: options.ruleId,
       offsetSeconds: options.offsetSeconds,
@@ -108,5 +120,11 @@ export async function applyStateDispatch(
     ruleId: options.ruleId,
     offsetSeconds: options.offsetSeconds,
   });
+  if (assignments.length > 0 || supervisorAssignments.length > 0) {
+    await applyParsedCommandToBoard(io, sessionId, {
+      assignments,
+      supervisorAssignments,
+    });
+  }
   return sanitized;
 }

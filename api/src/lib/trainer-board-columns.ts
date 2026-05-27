@@ -1,54 +1,113 @@
-/** Canonical division keys stored in DB and shown on the command board (column order). */
-export const BOARD_COLUMN_KEYS = [
-	'Basement',
-	'Div 1',
-	'Div 2',
-	'Div 3',
-	'Roof',
-	'RIC',
-	'Med',
-	'Reserve'
-] as const;
+export type BoardColumnKind = 'blank' | 'group' | 'division' | 'fixed';
 
-export type BoardColumnKey = (typeof BOARD_COLUMN_KEYS)[number];
-
-const KEY_SET = new Set<string>(BOARD_COLUMN_KEYS);
-
-/** True if value is already a canonical column key. */
-export function isBoardColumnKey(value: string): value is BoardColumnKey {
-	return KEY_SET.has(value);
+export interface BoardColumnState {
+	slotIndex: number;
+	kind: BoardColumnKind;
+	label: string;
+	supervisorUnit: string | null;
+	isFixed?: boolean;
 }
 
-/**
- * Map parser output (boardColumn, division, location) to a canonical column key, or null.
- */
-export function normalizeBoardColumn(parsed: Record<string, unknown>): BoardColumnKey | null {
+export interface SupervisorAssignmentAction {
+	unitName: string;
+	areaLabel: string;
+	areaKind: 'division' | 'group';
+	subordinateUnits: string[];
+}
+
+export const WORKING_ASSIGNMENTS_SLOT_INDEX = 7;
+
+export const DEFAULT_BOARD_COLUMNS: BoardColumnState[] = [
+	{ slotIndex: 0, kind: 'blank', label: '', supervisorUnit: null },
+	{ slotIndex: 1, kind: 'blank', label: '', supervisorUnit: null },
+	{ slotIndex: 2, kind: 'blank', label: '', supervisorUnit: null },
+	{ slotIndex: 3, kind: 'blank', label: '', supervisorUnit: null },
+	{ slotIndex: 4, kind: 'fixed', label: 'Roof', supervisorUnit: null, isFixed: true },
+	{ slotIndex: 5, kind: 'fixed', label: 'Med', supervisorUnit: null, isFixed: true },
+	{ slotIndex: 6, kind: 'fixed', label: 'RIC', supervisorUnit: null, isFixed: true },
+	{
+		slotIndex: WORKING_ASSIGNMENTS_SLOT_INDEX,
+		kind: 'fixed',
+		label: 'Working Assignments',
+		supervisorUnit: null,
+		isFixed: true
+	}
+];
+
+export function normalizeBoardColumns(input: unknown): BoardColumnState[] {
+	const bySlot = new Map<number, Partial<BoardColumnState>>();
+	if (Array.isArray(input)) {
+		for (const item of input) {
+			if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+			const slotIndex = Number((item as { slotIndex?: unknown }).slotIndex);
+			if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 7) continue;
+			bySlot.set(slotIndex, item as Partial<BoardColumnState>);
+		}
+	}
+
+	return DEFAULT_BOARD_COLUMNS.map((fallback) => {
+		const raw = bySlot.get(fallback.slotIndex);
+		if (!raw) return { ...fallback };
+		const isFixed = fallback.isFixed === true;
+		const rawKind = raw.kind;
+		const kind: BoardColumnKind = isFixed
+			? 'fixed'
+			: rawKind === 'group' || rawKind === 'division'
+				? rawKind
+				: 'blank';
+		const label = isFixed ? fallback.label : cleanBoardLabel(raw.label ?? '');
+		return {
+			slotIndex: fallback.slotIndex,
+			kind,
+			label: kind === 'blank' ? '' : label,
+			supervisorUnit: cleanBoardLabel(raw.supervisorUnit ?? '') || null,
+			isFixed
+		};
+	});
+}
+
+export function cleanBoardLabel(value: unknown): string {
+	return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+export function normalizeBoardColumn(parsed: Record<string, unknown>): string | null {
 	const raw = [parsed.boardColumn, parsed.division, parsed.location]
 		.map((v) => (v == null ? '' : String(v).trim()))
 		.find((s) => s.length > 0);
 	if (!raw) return null;
-	if (isBoardColumnKey(raw)) return raw;
 
 	const t = raw.toLowerCase().replace(/\s+/g, ' ');
 
-	const ifMatch = (patterns: string[], key: BoardColumnKey): boolean =>
-		patterns.some((p) => t === p || t.includes(p));
+	const ifMatch = (patterns: string[], key: string): string | null =>
+		patterns.some((p) => t === p || t.includes(p)) ? key : null;
 
-	if (ifMatch(['basement', 'below grade', 'cellar'], 'Basement')) return 'Basement';
-	if (
-		ifMatch(['div 1', 'division 1', 'div1', 'd1', 'first division', 'floor 1', '1st floor'], 'Div 1')
-	)
-		return 'Div 1';
-	if (ifMatch(['div 2', 'division 2', 'div2', 'd2', 'second division', 'floor 2', '2nd floor'], 'Div 2'))
-		return 'Div 2';
-	if (ifMatch(['div 3', 'division 3', 'div3', 'd3', 'third division', 'floor 3', '3rd floor'], 'Div 3'))
-		return 'Div 3';
-	if (ifMatch(['roof', 'rooftop', 'on the roof', 'aerial', 'vertical vent', 'ladder pipe', 'roof operations'], 'Roof'))
-		return 'Roof';
-	if (ifMatch(['ric', 'rapid intervention', 'rit', 'fast team'], 'RIC')) return 'RIC';
-	if (ifMatch(['med', 'medical', 'ems', 'rehab'], 'Med')) return 'Med';
-	if (ifMatch(['staging', 'staged', 'reserve', 'pool', 'unassigned', 'other'], 'Reserve'))
-		return 'Reserve';
+	const fixed =
+		ifMatch(['roof', 'rooftop', 'on the roof', 'aerial', 'vertical vent', 'ladder pipe', 'roof operations'], 'Roof') ??
+		ifMatch(['ric', 'rapid intervention', 'rit', 'fast team'], 'RIC') ??
+		ifMatch(['med', 'medical', 'ems', 'rehab'], 'Med') ??
+		ifMatch(['working assignments', 'staging', 'staged', 'reserve', 'pool', 'unassigned', 'other'], 'Working Assignments');
+	if (fixed) return fixed;
+
+	const divisionLabel = parseDivisionLabel(t);
+	if (divisionLabel) return divisionLabel;
+
+	return titleCaseLabel(raw);
+}
+
+/** Match geographic division labels without treating "div" as a prefix of "division". */
+function parseDivisionLabel(t: string): string | null {
+	const divisionLong = t.match(/\bdivision\s+([a-z0-9]+)\b/);
+	if (divisionLong?.[1]) return `Division ${divisionLong[1].toUpperCase()}`;
+
+	const divShort = t.match(/\bdiv\s+([a-z0-9]+)\b/);
+	if (divShort?.[1]) return `Division ${divShort[1].toUpperCase()}`;
+
+	const floorMatch = t.match(/\b(?:floor|fl)\s+([a-z0-9]+)\b/);
+	if (floorMatch?.[1]) return `Division ${floorMatch[1].toUpperCase()}`;
+
+	// Speech-to-text sometimes drops the leading "d" / "div"
+	const isionMatch = t.match(/\b(?:d)?ision\s+([a-z0-9]+)\b/);
+	if (isionMatch?.[1]) return `Division ${isionMatch[1].toUpperCase()}`;
 
 	return null;
 }
@@ -75,10 +134,34 @@ export function extractAssignmentActions(parsed: Record<string, unknown>): Recor
 	return [];
 }
 
-export function shouldPlaceAssignment(item: Record<string, unknown>, column: BoardColumnKey | null): boolean {
+export function extractSupervisorAssignmentActions(parsed: Record<string, unknown>): SupervisorAssignmentAction[] {
+	const raw = parsed.supervisorAssignments;
+	if (!Array.isArray(raw)) return [];
+	return raw
+		.filter((x): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x))
+		.map((item) => {
+			const unitName = cleanBoardLabel(item.unitName);
+			const areaLabel = normalizeAreaLabel(item.areaLabel ?? item.boardColumn ?? item.division);
+			const areaKind: 'division' | 'group' =
+				String(item.areaKind ?? '').toLowerCase() === 'group' ? 'group' : 'division';
+			const subordinateUnits = Array.isArray(item.subordinateUnits)
+				? item.subordinateUnits.map(cleanBoardLabel).filter(Boolean)
+				: [];
+			return { unitName, areaLabel, areaKind, subordinateUnits };
+		})
+		.filter((item) => item.unitName && item.areaLabel);
+}
+
+export function normalizeAreaLabel(value: unknown): string {
+	const direct = cleanBoardLabel(value);
+	if (!direct) return '';
+	const normalized = normalizeBoardColumn({ boardColumn: direct });
+	return normalized ?? titleCaseLabel(direct);
+}
+
+export function shouldPlaceAssignment(item: Record<string, unknown>, column: string | null): boolean {
 	if (!item.unitName || String(item.unitName).trim() === '') return false;
-	if (!column) return false;
-	return String(item.assignment ?? '').trim().length > 0;
+	return Boolean(column || String(item.assignment ?? '').trim().length > 0);
 }
 
 /**
@@ -93,4 +176,15 @@ export function resolveSizeUpSummary(parsed: Record<string, unknown>, transcript
 		return s || null;
 	}
 	return null;
+}
+
+function titleCaseLabel(value: string): string {
+	return cleanBoardLabel(value)
+		.toLowerCase()
+		.split(' ')
+		.map((part) => {
+			if (part.length <= 3 && /^[a-z0-9]+$/.test(part)) return part.toUpperCase();
+			return part.charAt(0).toUpperCase() + part.slice(1);
+		})
+		.join(' ');
 }

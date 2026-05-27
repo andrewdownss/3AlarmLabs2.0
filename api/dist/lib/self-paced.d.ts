@@ -10,6 +10,8 @@ export interface SelfPacedDispatchPayload {
     side?: 'alpha' | 'bravo' | 'charlie' | 'delta';
     hazard?: string;
     update?: string;
+    assignments?: Array<Record<string, unknown>>;
+    supervisorAssignments?: Array<Record<string, unknown>>;
 }
 export interface TimelineEvent {
     id: string;
@@ -56,26 +58,36 @@ export declare const dispatchPayloadSchema: z.ZodEffects<z.ZodObject<{
     side: z.ZodOptional<z.ZodEnum<["alpha", "bravo", "charlie", "delta"]>>;
     hazard: z.ZodOptional<z.ZodString>;
     update: z.ZodOptional<z.ZodString>;
+    assignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
+    supervisorAssignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
 }, "strip", z.ZodTypeAny, {
     stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
     side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
     hazard?: string | undefined;
     update?: string | undefined;
+    assignments?: Record<string, unknown>[] | undefined;
+    supervisorAssignments?: Record<string, unknown>[] | undefined;
 }, {
     stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
     side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
     hazard?: string | undefined;
     update?: string | undefined;
+    assignments?: Record<string, unknown>[] | undefined;
+    supervisorAssignments?: Record<string, unknown>[] | undefined;
 }>, {
     stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
     side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
     hazard?: string | undefined;
     update?: string | undefined;
+    assignments?: Record<string, unknown>[] | undefined;
+    supervisorAssignments?: Record<string, unknown>[] | undefined;
 }, {
     stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
     side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
     hazard?: string | undefined;
     update?: string | undefined;
+    assignments?: Record<string, unknown>[] | undefined;
+    supervisorAssignments?: Record<string, unknown>[] | undefined;
 }>;
 export declare const assignmentMatchSchema: z.ZodEffects<z.ZodObject<{
     unitName: z.ZodOptional<z.ZodString>;
@@ -112,26 +124,36 @@ export declare const timelineEventSchema: z.ZodObject<{
         side: z.ZodOptional<z.ZodEnum<["alpha", "bravo", "charlie", "delta"]>>;
         hazard: z.ZodOptional<z.ZodString>;
         update: z.ZodOptional<z.ZodString>;
+        assignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
+        supervisorAssignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
     }, "strip", z.ZodTypeAny, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }>, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }>;
 }, "strip", z.ZodTypeAny, {
     id: string;
@@ -141,6 +163,8 @@ export declare const timelineEventSchema: z.ZodObject<{
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     };
     label?: string | undefined;
 }, {
@@ -151,6 +175,8 @@ export declare const timelineEventSchema: z.ZodObject<{
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     };
     label?: string | undefined;
 }>;
@@ -243,26 +269,36 @@ export declare const assignmentCompletionRuleSchema: z.ZodObject<{
         side: z.ZodOptional<z.ZodEnum<["alpha", "bravo", "charlie", "delta"]>>;
         hazard: z.ZodOptional<z.ZodString>;
         update: z.ZodOptional<z.ZodString>;
+        assignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
+        supervisorAssignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
     }, "strip", z.ZodTypeAny, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }>, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }, {
         stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     }>;
 }, "strip", z.ZodTypeAny, {
     id: string;
@@ -271,6 +307,8 @@ export declare const assignmentCompletionRuleSchema: z.ZodObject<{
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     };
     trigger: {
         unitName?: string | undefined;
@@ -287,6 +325,8 @@ export declare const assignmentCompletionRuleSchema: z.ZodObject<{
         side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
         hazard?: string | undefined;
         update?: string | undefined;
+        assignments?: Record<string, unknown>[] | undefined;
+        supervisorAssignments?: Record<string, unknown>[] | undefined;
     };
     trigger: {
         unitName?: string | undefined;
@@ -308,26 +348,36 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side: z.ZodOptional<z.ZodEnum<["alpha", "bravo", "charlie", "delta"]>>;
             hazard: z.ZodOptional<z.ZodString>;
             update: z.ZodOptional<z.ZodString>;
+            assignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
+            supervisorAssignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
         }, "strip", z.ZodTypeAny, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }>, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }>;
     }, "strip", z.ZodTypeAny, {
         id: string;
@@ -337,6 +387,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         label?: string | undefined;
     }, {
@@ -347,6 +399,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         label?: string | undefined;
     }>, "many">>;
@@ -439,26 +493,36 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side: z.ZodOptional<z.ZodEnum<["alpha", "bravo", "charlie", "delta"]>>;
             hazard: z.ZodOptional<z.ZodString>;
             update: z.ZodOptional<z.ZodString>;
+            assignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
+            supervisorAssignments: z.ZodOptional<z.ZodArray<z.ZodRecord<z.ZodString, z.ZodUnknown>, "many">>;
         }, "strip", z.ZodTypeAny, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }>, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }, {
             stage?: "incipient" | "growth" | "fully_developed" | "decay" | undefined;
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         }>;
     }, "strip", z.ZodTypeAny, {
         id: string;
@@ -467,6 +531,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         trigger: {
             unitName?: string | undefined;
@@ -483,6 +549,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         trigger: {
             unitName?: string | undefined;
@@ -515,6 +583,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         label?: string | undefined;
     }[];
@@ -537,6 +607,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         trigger: {
             unitName?: string | undefined;
@@ -563,6 +635,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         label?: string | undefined;
     }[] | undefined;
@@ -585,6 +659,8 @@ export declare const selfPacedConfigSchema: z.ZodObject<{
             side?: "alpha" | "bravo" | "charlie" | "delta" | undefined;
             hazard?: string | undefined;
             update?: string | undefined;
+            assignments?: Record<string, unknown>[] | undefined;
+            supervisorAssignments?: Record<string, unknown>[] | undefined;
         };
         trigger: {
             unitName?: string | undefined;

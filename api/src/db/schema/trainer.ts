@@ -110,6 +110,13 @@ export const classrooms = pgTable(
     name: text("name").notNull(),
     code: text("code").notNull().unique(),
     maxSeats: integer("max_seats").notNull().default(100),
+    useSelfPacedScript: boolean("use_self_paced_script")
+      .notNull()
+      .default(true),
+    boardLabelMode: text("board_label_mode")
+      .$type<"division_group" | "student_defined">()
+      .notNull()
+      .default("division_group"),
     activeSessionId: text("active_session_id"),
     calledOnParticipantId: text("called_on_participant_id"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -177,6 +184,18 @@ export const trainerSessions = pgTable(
     endedAt: timestamp("ended_at", { withTimezone: true, mode: "date" }),
     pausedAt: timestamp("paused_at", { withTimezone: true, mode: "date" }),
     accumulatedPauseMs: integer("accumulated_pause_ms").notNull().default(0),
+    boardColumnsJson: jsonb("board_columns_json")
+      .$type<
+        Array<{
+          slotIndex: number;
+          kind: "blank" | "group" | "division" | "fixed";
+          label: string;
+          supervisorUnit: string | null;
+          isFixed?: boolean;
+        }>
+      >()
+      .notNull()
+      .default([]),
     simulationOutcome: text("simulation_outcome")
       .$type<SimulationOutcome>()
       .notNull()
@@ -243,6 +262,7 @@ export const trainerCommandBoardEntries = pgTable(
     sessionId: text("session_id")
       .notNull()
       .references(() => trainerSessions.id, { onDelete: "cascade" }),
+    slotIndex: integer("slot_index"),
     division: text("division").notNull().default("Unassigned"),
     unitName: text("unit_name").notNull(),
     assignment: text("assignment"),

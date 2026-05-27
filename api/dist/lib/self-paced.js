@@ -10,9 +10,16 @@ export const dispatchPayloadSchema = z
     stage: stageEnum.optional(),
     side: sideEnum.optional(),
     hazard: z.string().max(2000).optional(),
-    update: z.string().max(2000).optional()
+    update: z.string().max(2000).optional(),
+    assignments: z.array(z.record(z.string(), z.unknown())).optional(),
+    supervisorAssignments: z.array(z.record(z.string(), z.unknown())).optional()
 })
-    .refine((p) => p.stage || p.side || (p.hazard && p.hazard.trim()) || (p.update && p.update.trim()), 'dispatch payload requires at least one field');
+    .refine((p) => p.stage ||
+    p.side ||
+    (p.hazard && p.hazard.trim()) ||
+    (p.update && p.update.trim()) ||
+    (p.assignments?.length ?? 0) > 0 ||
+    (p.supervisorAssignments?.length ?? 0) > 0, 'dispatch payload requires at least one field');
 export const assignmentMatchSchema = z
     .object({
     unitName: z.string().trim().min(1).optional(),

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { trainerScenarios, trainerScheduledEvents, trainerSessionEvents, trainerSessions, trainerRadioMessages, trainerCommandBoardEntries } from '../db/schema/trainer.js';
+import { trainerScenarios, trainerScheduledEvents, trainerSessionEvents, trainerSessions, trainerRadioMessages, trainerCommandBoardEntries, classrooms } from '../db/schema/trainer.js';
 import { getSessionForUser } from '../middleware/authz.js';
 import { parseSelfPacedConfig, simulationElapsedMs } from '../lib/self-paced.js';
 import { endSession, evaluateAfterBoardChange, runTimelineTick } from '../lib/self-paced-runtime.js';
@@ -266,7 +266,8 @@ export function startSelfPacedPoller(io, intervalMs = 2000) {
                 .select({ id: trainerSessions.id })
                 .from(trainerSessions)
                 .leftJoin(trainerScenarios, eq(trainerSessions.scenarioId, trainerScenarios.id))
-                .where(and(eq(trainerSessions.hasStarted, true), isNull(trainerSessions.endedAt), or(ne(trainerSessions.mode, 'classroom'), isNotNull(trainerScenarios.selfPacedConfigJson))));
+                .leftJoin(classrooms, eq(trainerSessions.classroomId, classrooms.id))
+                .where(and(eq(trainerSessions.hasStarted, true), isNull(trainerSessions.endedAt), or(ne(trainerSessions.mode, 'classroom'), and(eq(classrooms.useSelfPacedScript, true), isNotNull(trainerScenarios.selfPacedConfigJson)))));
             const sessionIds = new Set([
                 ...dueScheduled.map((r) => r.sessionId),
                 ...activeRows.map((r) => r.id)

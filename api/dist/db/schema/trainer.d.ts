@@ -632,6 +632,42 @@ export declare const classrooms: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        useSelfPacedScript: import("drizzle-orm/pg-core").PgColumn<{
+            name: "use_self_paced_script";
+            tableName: "classrooms";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        boardLabelMode: import("drizzle-orm/pg-core").PgColumn<{
+            name: "board_label_mode";
+            tableName: "classrooms";
+            dataType: "string";
+            columnType: "PgText";
+            data: "division_group" | "student_defined";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "division_group" | "student_defined";
+        }>;
         activeSessionId: import("drizzle-orm/pg-core").PgColumn<{
             name: "active_session_id";
             tableName: "classrooms";
@@ -1105,6 +1141,37 @@ export declare const trainerSessions: import("drizzle-orm/pg-core").PgTableWithC
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        boardColumnsJson: import("drizzle-orm/pg-core").PgColumn<{
+            name: "board_columns_json";
+            tableName: "trainer_sessions";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: {
+                slotIndex: number;
+                kind: "blank" | "group" | "division" | "fixed";
+                label: string;
+                supervisorUnit: string | null;
+                isFixed?: boolean;
+            }[];
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: {
+                slotIndex: number;
+                kind: "blank" | "group" | "division" | "fixed";
+                label: string;
+                supervisorUnit: string | null;
+                isFixed?: boolean;
+            }[];
+        }>;
         simulationOutcome: import("drizzle-orm/pg-core").PgColumn<{
             name: "simulation_outcome";
             tableName: "trainer_sessions";
@@ -1419,6 +1486,23 @@ export declare const trainerCommandBoardEntries: import("drizzle-orm/pg-core").P
             isAutoincrement: false;
             hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        slotIndex: import("drizzle-orm/pg-core").PgColumn<{
+            name: "slot_index";
+            tableName: "trainer_command_board_entries";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
             baseColumn: never;
             identity: undefined;
             generated: undefined;

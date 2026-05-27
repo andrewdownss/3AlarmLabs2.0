@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { trainerSessions, trainerSessionEvents } from "../db/schema/trainer.js";
 import { redis } from "../config/redis.js";
+import { applyParsedCommandToBoard } from "./board-persistence.js";
 export const VALID_STAGES = new Set([
     "incipient",
     "growth",
@@ -40,7 +41,13 @@ export async function applyStateDispatch(io, sessionId, payload, options) {
         sanitized.hazard = payload.hazard.trim();
     if (payload.update && payload.update.trim())
         sanitized.update = payload.update.trim();
-    if (Object.keys(sanitized).length === 0)
+    const assignments = Array.isArray(payload.assignments) ? payload.assignments : [];
+    const supervisorAssignments = Array.isArray(payload.supervisorAssignments)
+        ? payload.supervisorAssignments
+        : [];
+    if (Object.keys(sanitized).length === 0 &&
+        assignments.length === 0 &&
+        supervisorAssignments.length === 0)
         return sanitized;
     if (Object.keys(dbUpdates).length > 0) {
         await db
@@ -57,6 +64,8 @@ export async function applyStateDispatch(io, sessionId, payload, options) {
         eventType,
         payloadJson: {
             ...sanitized,
+            assignments,
+            supervisorAssignments,
             source: options.source,
             ruleId: options.ruleId,
             offsetSeconds: options.offsetSeconds,
@@ -74,6 +83,12 @@ export async function applyStateDispatch(io, sessionId, payload, options) {
         ruleId: options.ruleId,
         offsetSeconds: options.offsetSeconds,
     });
+    if (assignments.length > 0 || supervisorAssignments.length > 0) {
+        await applyParsedCommandToBoard(io, sessionId, {
+            assignments,
+            supervisorAssignments,
+        });
+    }
     return sanitized;
 }
 //# sourceMappingURL=state-dispatch.js.map

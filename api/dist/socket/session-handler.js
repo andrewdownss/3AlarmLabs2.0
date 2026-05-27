@@ -4,6 +4,8 @@ import { eq, and } from 'drizzle-orm';
 import { getSessionForUser } from '../middleware/authz.js';
 import { applyStateDispatch } from '../lib/state-dispatch.js';
 import { evaluateAfterBoardChange } from '../lib/self-paced-runtime.js';
+import { broadcastBoardState, loadBoardState, movePersistedBoardEntry, persistBoardState } from '../lib/board-persistence.js';
+import { applyTaskAssignment, clearBoardColumn, renameBoardColumn, setColumnSupervisor } from '../services/board-engine.js';
 function getSocketUserId(socket) {
     return socket.userId;
 }
@@ -90,6 +92,11 @@ export function registerSessionHandlers(io, socket) {
         trackTrainerSession(socket, data.sessionId);
         console.log(`[socket] User ${userId} joined session ${data.sessionId}`);
         const role = session.instructorId === userId ? 'instructor' : 'student';
+        const boardState = await loadBoardState(data.sessionId);
+        socket.emit('trainer:board:snapshot', {
+            boardColumns: boardState.columns,
+            boardEntries: boardState.entries
+        });
         if (role === 'student') {
             socket.to(`session:${data.sessionId}`).emit('trainer:student:joined', { userId });
         }
@@ -151,30 +158,15 @@ export function registerSessionHandlers(io, socket) {
         const access = await getSessionAccessForSocket(socket, data.sessionId);
         if (!access)
             return;
-        const existing = await db.select().from(trainerCommandBoardEntries)
-            .where(and(eq(trainerCommandBoardEntries.sessionId, data.sessionId), eq(trainerCommandBoardEntries.unitName, data.unitName))).limit(1);
-        let entryId;
-        if (existing.length > 0) {
-            entryId = existing[0].id;
-            await db.update(trainerCommandBoardEntries)
-                .set({ division: data.division, assignment: data.assignment ?? '', status: data.status ?? 'Assigned', location: data.division, lastUpdatedAt: new Date() })
-                .where(eq(trainerCommandBoardEntries.id, entryId));
-        }
-        else {
-            entryId = crypto.randomUUID();
-            await db.insert(trainerCommandBoardEntries).values({
-                id: entryId,
-                sessionId: data.sessionId,
-                division: data.division,
-                unitName: data.unitName,
-                assignment: data.assignment ?? '',
-                location: data.division,
-                status: data.status ?? 'Assigned'
-            });
-        }
-        io.to(`session:${data.sessionId}`).emit('trainer:board:updated', {
-            entry: { id: entryId, division: data.division, unitName: data.unitName, assignment: data.assignment ?? '', status: data.status ?? 'Assigned' }
+        const state = await loadBoardState(data.sessionId);
+        const next = applyTaskAssignment(state.columns, state.entries, {
+            unitName: data.unitName,
+            assignment: data.assignment ?? '',
+            boardColumn: data.division,
+            status: data.status ?? 'Assigned'
         });
+        await persistBoardState(data.sessionId, next.columns, next.entries);
+        broadcastBoardState(io, data.sessionId, next.columns, next.entries);
         await evaluateAfterBoardChange(io, data.sessionId);
     });
     socket.on('trainer:board:correct', async (data) => {
@@ -184,30 +176,19 @@ export function registerSessionHandlers(io, socket) {
         if (!access)
             return;
         const actorId = getSocketUserId(socket) ?? getSocketParticipantId(socket) ?? 'unknown';
-        const existing = await db.select().from(trainerCommandBoardEntries)
-            .where(and(eq(trainerCommandBoardEntries.sessionId, data.sessionId), eq(trainerCommandBoardEntries.unitName, data.unitName))).limit(1);
-        const division = data.division?.trim() || existing[0]?.division || 'Unassigned';
-        const assignment = data.assignment ?? existing[0]?.assignment ?? '';
-        const status = data.status?.trim() || existing[0]?.status || 'Assigned';
-        let entryId;
-        if (existing.length > 0) {
-            entryId = existing[0].id;
-            await db.update(trainerCommandBoardEntries)
-                .set({ division, assignment, status, location: division, lastUpdatedAt: new Date() })
-                .where(eq(trainerCommandBoardEntries.id, entryId));
-        }
-        else {
-            entryId = crypto.randomUUID();
-            await db.insert(trainerCommandBoardEntries).values({
-                id: entryId,
-                sessionId: data.sessionId,
-                division,
-                unitName: data.unitName,
-                assignment,
-                location: division,
-                status
-            });
-        }
+        const state = await loadBoardState(data.sessionId);
+        const existing = state.entries.find((entry) => entry.unitName.toLowerCase() === data.unitName.toLowerCase());
+        const division = data.division?.trim() || existing?.division || 'Working Assignments';
+        const assignment = data.assignment ?? existing?.assignment ?? '';
+        const status = data.status?.trim() || existing?.status || 'Assigned';
+        const next = applyTaskAssignment(state.columns, state.entries, {
+            unitName: data.unitName,
+            assignment,
+            boardColumn: division,
+            status
+        });
+        await persistBoardState(data.sessionId, next.columns, next.entries);
+        const entryId = next.entries.find((entry) => entry.unitName.toLowerCase() === data.unitName.toLowerCase())?.id ?? crypto.randomUUID();
         await db.insert(trainerSessionEvents).values({
             id: crypto.randomUUID(),
             sessionId: data.sessionId,
@@ -222,9 +203,7 @@ export function registerSessionHandlers(io, socket) {
                 radioMessageId: data.radioMessageId ?? null
             }
         });
-        io.to(`session:${data.sessionId}`).emit('trainer:board:updated', {
-            entry: { id: entryId, division, unitName: data.unitName, assignment, status }
-        });
+        broadcastBoardState(io, data.sessionId, next.columns, next.entries);
         await evaluateAfterBoardChange(io, data.sessionId);
     });
     socket.on('trainer:board:remove', async (data) => {
@@ -236,6 +215,8 @@ export function registerSessionHandlers(io, socket) {
         await db.delete(trainerCommandBoardEntries)
             .where(and(eq(trainerCommandBoardEntries.sessionId, data.sessionId), eq(trainerCommandBoardEntries.unitName, data.unitName)));
         io.to(`session:${data.sessionId}`).emit('trainer:board:removed', { unitName: data.unitName });
+        const state = await loadBoardState(data.sessionId);
+        broadcastBoardState(io, data.sessionId, state.columns, state.entries);
         await evaluateAfterBoardChange(io, data.sessionId);
     });
     socket.on('trainer:board:update-status', async (data) => {
@@ -251,6 +232,45 @@ export function registerSessionHandlers(io, socket) {
             unitName: data.unitName,
             status: data.status
         });
+        const state = await loadBoardState(data.sessionId);
+        broadcastBoardState(io, data.sessionId, state.columns, state.entries);
+        await evaluateAfterBoardChange(io, data.sessionId);
+    });
+    socket.on('board:set-column-supervisor', async (data) => {
+        const access = await getSessionAccessForSocket(socket, data.sessionId);
+        if (!access?.isInstructor)
+            return;
+        const state = await loadBoardState(data.sessionId);
+        const columns = setColumnSupervisor(state.columns, data.slotIndex, data.unitName, data.kind, data.label);
+        await persistBoardState(data.sessionId, columns, state.entries);
+        broadcastBoardState(io, data.sessionId, columns, state.entries);
+    });
+    socket.on('board:rename-column', async (data) => {
+        const access = await getSessionAccessForSocket(socket, data.sessionId);
+        if (!access?.isInstructor)
+            return;
+        const state = await loadBoardState(data.sessionId);
+        const columns = renameBoardColumn(state.columns, data.slotIndex, data.label, data.kind);
+        const slot = columns.find((column) => column.slotIndex === data.slotIndex);
+        const entries = state.entries.map((entry) => entry.slotIndex === data.slotIndex && slot ? { ...entry, division: slot.label } : entry);
+        await persistBoardState(data.sessionId, columns, entries);
+        broadcastBoardState(io, data.sessionId, columns, entries);
+    });
+    socket.on('board:clear-column', async (data) => {
+        const access = await getSessionAccessForSocket(socket, data.sessionId);
+        if (!access?.isInstructor)
+            return;
+        const state = await loadBoardState(data.sessionId);
+        const next = clearBoardColumn(state.columns, state.entries, data.slotIndex);
+        await persistBoardState(data.sessionId, next.columns, next.entries);
+        broadcastBoardState(io, data.sessionId, next.columns, next.entries);
+        await evaluateAfterBoardChange(io, data.sessionId);
+    });
+    socket.on('board:move-entry', async (data) => {
+        const access = await getSessionAccessForSocket(socket, data.sessionId);
+        if (!access)
+            return;
+        await movePersistedBoardEntry(io, data.sessionId, data.entryId, data.targetSlotIndex);
         await evaluateAfterBoardChange(io, data.sessionId);
     });
     socket.on('trainer:session:end', async (data) => {
