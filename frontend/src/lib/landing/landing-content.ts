@@ -86,7 +86,8 @@ export const builtForEveryLevel: AudienceCard[] = [
 	{
 		id: 'firefighters',
 		title: 'Firefighters',
-		description: 'Get command reps when you can grab them: at the station, at home, or before the next promotional process sneaks up.',
+		description:
+			'Get command reps when you can grab them: at the station, at home, or before the next promotional process sneaks up.',
 		bullets: [
 			'Self-paced scenarios whenever you have time',
 			'Radio practice, size-up, and board discipline',
@@ -96,7 +97,8 @@ export const builtForEveryLevel: AudienceCard[] = [
 	{
 		id: 'departments',
 		title: 'Fire departments',
-		description: 'Give members a place to practice command before the drill tower, the assessment center, or the real thing.',
+		description:
+			'Give members a place to practice command before the drill tower, the assessment center, or the real thing.',
 		bullets: [
 			'Access for teams, companies, and academies',
 			'Instructor-led command sessions',
@@ -106,7 +108,8 @@ export const builtForEveryLevel: AudienceCard[] = [
 	{
 		id: 'training-companies',
 		title: 'Training companies',
-		description: 'Bring clients into command simulations without hauling out a pile of props, whiteboards, and "pretend this is smoke" explanations.',
+		description:
+			'Bring clients into command simulations without hauling out a pile of props, whiteboards, and "pretend this is smoke" explanations.',
 		bullets: [
 			'Commercial training use',
 			'Classroom and instructor modes',
@@ -124,17 +127,20 @@ export const builtWithFireService = {
 		{
 			id: 'training-companies',
 			label: 'Training companies',
-			description: 'Scenario design and instructor workflows informed by providers who teach command for a living.'
+			description:
+				'Scenario design and instructor workflows informed by providers who teach command for a living.'
 		},
 		{
 			id: 'departments',
 			label: 'Fire departments',
-			description: 'Department pilots and academy feedback help shape session modes, team access, and the small details that matter.'
+			description:
+				'Department pilots and academy feedback help shape session modes, team access, and the small details that matter.'
 		},
 		{
 			id: 'firefighters',
 			label: 'Individual firefighters',
-			description: 'Self-paced reps and replay review refined with officers and officer candidates preparing to lead.'
+			description:
+				'Self-paced reps and replay review refined with officers and officer candidates preparing to lead.'
 		}
 	] satisfies CollaborationPartner[]
 };
@@ -176,7 +182,8 @@ export function pricingPaths(monthlyPrice: number): PricingPath[] {
 			label: 'Self-serve',
 			title: 'Individual',
 			price: `$${monthlyPrice.toFixed(2)}/mo`,
-			description: 'Unlimited self-paced command reps, weekly library scenarios, and saved replay history.',
+			description:
+				'Unlimited self-paced command reps, weekly library scenarios, and saved replay history.',
 			cta: 'Start 7-day trial',
 			href: INDIVIDUAL_SIGNUP_HREF,
 			highlight: true
@@ -186,16 +193,18 @@ export function pricingPaths(monthlyPrice: number): PricingPath[] {
 			label: 'Teams',
 			title: 'Department / team access',
 			price: 'From $799/yr',
-			description: 'Instructor-led sessions, shared scenarios, and member access for departments, academies, and training divisions.',
+			description:
+				'Instructor-led sessions, shared scenarios, and member access for departments, academies, and training divisions.',
 			cta: 'Explore team access',
-			href: TEAM_ACCESS_HREF
+			href: '/pricing'
 		},
 		{
 			id: 'training-company',
 			label: 'Commercial',
 			title: 'Training company access',
 			price: 'Custom',
-			description: 'Commercial use, client-facing training rights, and annual agreements built for training businesses.',
+			description:
+				'Commercial use, client-facing training rights, and annual agreements built for training businesses.',
 			cta: 'Contact sales',
 			href: salesMail
 		}
@@ -237,17 +246,20 @@ export const howItWorks: HowItWorksStep[] = [
 	{
 		step: '01',
 		title: 'Pick the run',
-		description: 'Start with a ready-made fireground scenario built for self-paced command practice.'
+		description:
+			'Start with a ready-made fireground scenario built for self-paced command practice.'
 	},
 	{
 		step: '02',
 		title: 'Work the incident',
-		description: 'Give radio traffic, assign units, track conditions, and keep the command board from turning into soup.'
+		description:
+			'Give radio traffic, assign units, track conditions, and keep the command board from turning into soup.'
 	},
 	{
 		step: '03',
 		title: 'Look it over',
-		description: 'Replay the scenario afterward with transcripts, audio, and decisions, then spot what to tighten up next time.'
+		description:
+			'Replay the scenario afterward with transcripts, audio, and decisions, then spot what to tighten up next time.'
 	}
 ];
 

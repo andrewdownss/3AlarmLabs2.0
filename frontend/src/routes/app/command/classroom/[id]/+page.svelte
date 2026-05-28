@@ -4,6 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import BoardColumnEditSheet from '$lib/components/trainer/board-column-edit-sheet.svelte';
+	import BoardEntryEditSheet from '$lib/components/trainer/board-entry-edit-sheet.svelte';
 	import { getTrainerSocket } from '$lib/stores/socket';
 	import OverlayCanvas from '$lib/components/scene-editor/konva-overlay-editor/OverlayCanvas.svelte';
 	import {
@@ -174,6 +176,21 @@
 			(r: { unitName: string }) => !boardEntries.some((entry) => entry.unitName === r.unitName)
 		)
 	);
+	const boardColumnChoices = $derived(boardColumns.map((column) => column.label || column.header));
+	const STATUS_CHOICES = [
+		'Assigned',
+		'En Route',
+		'On Scene',
+		'Operating',
+		'PAR Completed',
+		'Available',
+		'Out of Service'
+	] as const;
+
+	let columnSheetOpen = $state(false);
+	let entrySheetOpen = $state(false);
+	let editingColumn = $state<BoardColumnState | null>(null);
+	let editingEntry = $state<BoardEntry | null>(null);
 
 	function formatClock(seconds: number) {
 		const m = Math.floor(seconds / 60)
@@ -231,33 +248,85 @@
 		socket?.emit('classroom:save-session', { classroomId: data.classroom.id });
 	}
 
-	function configureBoardColumn(col: BoardColumnState) {
+	function openColumnEdit(col: BoardColumnState) {
 		if (col.isFixed || !activeSession?.id) return;
-		const label = prompt('Division/group label', col.label || '');
-		if (label === null) return;
-		if (!label.trim()) {
-			socket?.emit('board:clear-column', { sessionId: activeSession.id, slotIndex: col.slotIndex });
+		editingColumn = col;
+		columnSheetOpen = true;
+	}
+
+	function closeColumnEdit() {
+		columnSheetOpen = false;
+		editingColumn = null;
+	}
+
+	function saveBoardColumn(values: {
+		label: string;
+		kind: 'division' | 'group';
+		supervisorUnit: string;
+	}) {
+		if (!activeSession?.id || !editingColumn) return;
+		if (!values.label) {
+			clearBoardColumn();
 			return;
 		}
-		const kind = confirm('Is this a geographic division? Choose Cancel for a task group.')
-			? 'division'
-			: 'group';
 		socket?.emit('board:rename-column', {
 			sessionId: activeSession.id,
-			slotIndex: col.slotIndex,
-			label: label.trim(),
-			kind
+			slotIndex: editingColumn.slotIndex,
+			label: values.label,
+			kind: values.kind
 		});
-		const supervisorUnit = prompt('Supervisor unit (optional)', col.supervisorUnit ?? '');
-		if (supervisorUnit?.trim()) {
-			socket?.emit('board:set-column-supervisor', {
-				sessionId: activeSession.id,
-				slotIndex: col.slotIndex,
-				unitName: supervisorUnit.trim(),
-				kind,
-				label: label.trim()
-			});
-		}
+		socket?.emit('board:set-column-supervisor', {
+			sessionId: activeSession.id,
+			slotIndex: editingColumn.slotIndex,
+			unitName: values.supervisorUnit,
+			kind: values.kind,
+			label: values.label
+		});
+		addTimelineEvent('BOARD', `Updated box: ${values.label}`);
+		closeColumnEdit();
+	}
+
+	function clearBoardColumn() {
+		if (!activeSession?.id || !editingColumn) return;
+		socket?.emit('board:clear-column', {
+			sessionId: activeSession.id,
+			slotIndex: editingColumn.slotIndex
+		});
+		addTimelineEvent('BOARD', `Cleared box ${editingColumn.label || editingColumn.header}`);
+		closeColumnEdit();
+	}
+
+	function openEntryEdit(entry: BoardEntry) {
+		editingEntry = entry;
+		entrySheetOpen = true;
+	}
+
+	function closeEntryEdit() {
+		entrySheetOpen = false;
+		editingEntry = null;
+	}
+
+	function saveBoardEntry(patch: { division: string; assignment: string; status: string }) {
+		if (!activeSession?.id || !editingEntry) return;
+		socket?.emit('trainer:board:correct', {
+			sessionId: activeSession.id,
+			unitName: editingEntry.unitName,
+			division: patch.division,
+			assignment: patch.assignment,
+			status: patch.status
+		});
+		addTimelineEvent('BOARD', `Updated ${editingEntry.unitName}`);
+		closeEntryEdit();
+	}
+
+	function removeBoardEntry() {
+		if (!activeSession?.id || !editingEntry) return;
+		socket?.emit('trainer:board:remove', {
+			sessionId: activeSession.id,
+			unitName: editingEntry.unitName
+		});
+		addTimelineEvent('BOARD', `${editingEntry.unitName} removed`);
+		closeEntryEdit();
 	}
 
 	function endClassroom() {
@@ -896,7 +965,7 @@
 									>
 										<button
 											type="button"
-											onclick={() => configureBoardColumn(col)}
+											onclick={() => openColumnEdit(col)}
 											disabled={col.isFixed}
 											class="flex min-h-8 shrink-0 flex-col items-center justify-center border-b border-inherit bg-white/45 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
 										>
@@ -909,14 +978,17 @@
 										</button>
 										<div class="min-h-0 flex-1 space-y-1 overflow-y-auto p-1">
 											{#each entriesForColumn(boardEntries as BoardEntryLike[], col) as entry (entry.id ?? entry.unitName)}
-												<div
-													class="w-full rounded border px-1.5 py-1 text-[9px] leading-tight font-medium {STATUS_COLORS[
+												<button
+													type="button"
+													onclick={() => openEntryEdit(entry as BoardEntry)}
+													class="w-full rounded border px-1.5 py-1 text-left text-[9px] leading-tight font-medium transition-colors hover:ring-1 hover:ring-primary {STATUS_COLORS[
 														entry.status
 													] ?? 'bg-gray-50 text-gray-700'}"
+													title="Click to edit or remove"
 												>
 													{formatUnitAssignmentLine(entry)}
 													<div class="mt-0.5 text-[8px] opacity-70">{entry.status}</div>
-												</div>
+												</button>
 											{/each}
 										</div>
 									</div>
@@ -931,6 +1003,32 @@
 		</div>
 	{/if}
 </div>
+
+<BoardColumnEditSheet
+	bind:open={columnSheetOpen}
+	column={editingColumn}
+	onClose={closeColumnEdit}
+	onSave={saveBoardColumn}
+	onClear={clearBoardColumn}
+/>
+
+<BoardEntryEditSheet
+	bind:open={entrySheetOpen}
+	entry={editingEntry
+		? {
+				unitName: editingEntry.unitName,
+				division: editingEntry.division,
+				assignment: editingEntry.assignment ?? '',
+				status: editingEntry.status
+			}
+		: null}
+	boxChoices={boardColumnChoices}
+	statusChoices={[...STATUS_CHOICES]}
+	statusColors={STATUS_COLORS}
+	onClose={closeEntryEdit}
+	onSave={saveBoardEntry}
+	onRemove={removeBoardEntry}
+/>
 
 {#snippet rosterAside()}
 	<aside

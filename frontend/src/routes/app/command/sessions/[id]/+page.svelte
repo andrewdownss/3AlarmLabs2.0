@@ -5,6 +5,8 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Sheet from '$lib/components/ui/sheet';
+	import BoardColumnEditSheet from '$lib/components/trainer/board-column-edit-sheet.svelte';
+	import BoardEntryEditSheet from '$lib/components/trainer/board-entry-edit-sheet.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { getTrainerSocket } from '$lib/stores/socket';
 	import OverlayCanvas from '$lib/components/scene-editor/konva-overlay-editor/OverlayCanvas.svelte';
@@ -62,6 +64,7 @@
 	let timelineHasNew = $state(false);
 
 	let editSheetOpen = $state(false);
+	let columnSheetOpen = $state(false);
 	let endSheetOpen = $state(false);
 	let dispatchSheetOpen = $state(false);
 	let sceneSheetOpen = $state(false);
@@ -846,9 +849,7 @@
 	}
 
 	let editingEntry = $state<BoardEntry | null>(null);
-	let editDivision = $state('');
-	let editAssignment = $state('');
-	let editStatus = $state('');
+	let editingColumn = $state<BoardColumnState | null>(null);
 
 	const STATUS_CHOICES = [
 		'Assigned',
@@ -861,9 +862,6 @@
 	];
 	function openEdit(entry: BoardEntry) {
 		editingEntry = entry;
-		editDivision = entry.division;
-		editAssignment = entry.assignment;
-		editStatus = entry.status;
 		editSheetOpen = true;
 	}
 
@@ -874,14 +872,68 @@
 		}, 250);
 	}
 
-	async function saveEdit() {
+	async function saveBoardEntry(patch: { division: string; assignment: string; status: string }) {
 		if (!editingEntry) return;
-		await correctBoardEntry(editingEntry, {
-			division: editDivision,
-			assignment: editAssignment,
-			status: editStatus
-		});
+		await correctBoardEntry(editingEntry, patch);
 		closeEdit();
+	}
+
+	function removeBoardEntry() {
+		if (!editingEntry) return;
+		socket?.emit('trainer:board:remove', {
+			sessionId: data.session.id,
+			unitName: editingEntry.unitName
+		});
+		addTimelineEvent('BOARD', `${editingEntry.unitName} removed`);
+		closeEdit();
+	}
+
+	function openColumnEdit(col: BoardColumnState) {
+		if (col.isFixed) return;
+		editingColumn = col;
+		columnSheetOpen = true;
+	}
+
+	function closeColumnEdit() {
+		columnSheetOpen = false;
+		editingColumn = null;
+	}
+
+	function saveBoardColumn(values: {
+		label: string;
+		kind: 'division' | 'group';
+		supervisorUnit: string;
+	}) {
+		if (!editingColumn) return;
+		if (!values.label) {
+			clearBoardColumn();
+			return;
+		}
+		socket?.emit('board:rename-column', {
+			sessionId: data.session.id,
+			slotIndex: editingColumn.slotIndex,
+			label: values.label,
+			kind: values.kind
+		});
+		socket?.emit('board:set-column-supervisor', {
+			sessionId: data.session.id,
+			slotIndex: editingColumn.slotIndex,
+			unitName: values.supervisorUnit,
+			kind: values.kind,
+			label: values.label
+		});
+		addTimelineEvent('BOARD', `Updated box: ${values.label}`);
+		closeColumnEdit();
+	}
+
+	function clearBoardColumn() {
+		if (!editingColumn) return;
+		socket?.emit('board:clear-column', {
+			sessionId: data.session.id,
+			slotIndex: editingColumn.slotIndex
+		});
+		addTimelineEvent('BOARD', `Cleared box ${editingColumn.label || editingColumn.header}`);
+		closeColumnEdit();
 	}
 
 	async function cycleEntryStatus(entry: BoardEntry) {
@@ -896,35 +948,6 @@
 		dispatchDivision = division;
 		dispatchAssignment = '';
 		dispatchSheetOpen = true;
-	}
-
-	function configureBoardColumn(col: BoardColumnState) {
-		if (col.isFixed) return;
-		const label = prompt('Division/group label', col.label || '');
-		if (label === null) return;
-		if (!label.trim()) {
-			socket?.emit('board:clear-column', { sessionId: data.session.id, slotIndex: col.slotIndex });
-			return;
-		}
-		const kind = confirm('Is this a geographic division? Choose Cancel for a task group.')
-			? 'division'
-			: 'group';
-		socket?.emit('board:rename-column', {
-			sessionId: data.session.id,
-			slotIndex: col.slotIndex,
-			label: label.trim(),
-			kind
-		});
-		const supervisorUnit = prompt('Supervisor unit (optional)', col.supervisorUnit ?? '');
-		if (supervisorUnit?.trim()) {
-			socket?.emit('board:set-column-supervisor', {
-				sessionId: data.session.id,
-				slotIndex: col.slotIndex,
-				unitName: supervisorUnit.trim(),
-				kind,
-				label: label.trim()
-			});
-		}
 	}
 
 	async function submitDispatch() {
@@ -1431,7 +1454,7 @@
 									>
 										<button
 											type="button"
-											onclick={() => configureBoardColumn(col)}
+											onclick={() => openColumnEdit(col)}
 											disabled={col.isFixed}
 											class="flex min-h-8 shrink-0 flex-col items-center justify-center border-b bg-white/45 px-0.5 py-1 text-center text-[9px] leading-tight font-bold tracking-tight text-muted-foreground uppercase"
 										>
@@ -1450,7 +1473,7 @@
 													class="w-full rounded border px-1.5 py-1 text-left text-[9px] leading-tight font-medium transition-colors hover:ring-1 hover:ring-primary {STATUS_COLORS[
 														entry.status
 													] ?? 'bg-gray-50 text-gray-700'}"
-													title="Click to fix this entry"
+													title="Click to edit or remove"
 												>
 													{formatUnitAssignmentLine(entry)}
 													<div class="mt-0.5 text-[8px] opacity-70">{entry.status}</div>
@@ -1999,67 +2022,31 @@
 	{/if}
 
 	<!-- Edit board entry sheet -->
-	<Sheet.Root
+	<BoardEntryEditSheet
 		bind:open={editSheetOpen}
-		onOpenChange={(o) => {
-			if (!o) closeEdit();
-		}}
-	>
-		<Sheet.Content side="bottom" class="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]">
-			<Sheet.Header class="text-left">
-				<Sheet.Title class="text-base">
-					Fix {editingEntry?.unitName ?? 'entry'}
-				</Sheet.Title>
-				<Sheet.Description class="text-xs">
-					Correct the parsed assignment if the radio was misheard.
-				</Sheet.Description>
-			</Sheet.Header>
-			<div class="space-y-3 px-4">
-				<div>
-					<label for="edit-division" class="mb-1 block text-xs font-medium">Board box</label>
-					<div class="flex flex-wrap gap-1.5">
-						{#each boardColumnChoices as d (d)}
-							<button
-								type="button"
-								onclick={() => (editDivision = d)}
-								class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editDivision ===
-								d
-									? 'border-primary bg-primary text-primary-foreground'
-									: 'bg-background hover:bg-muted'}"
-							>
-								{d}
-							</button>
-						{/each}
-					</div>
-				</div>
-				<div>
-					<label for="edit-assignment" class="mb-1 block text-xs font-medium">Assignment</label>
-					<Input id="edit-assignment" bind:value={editAssignment} class="h-11" />
-				</div>
-				<div>
-					<label for="edit-status" class="mb-1 block text-xs font-medium">Status</label>
-					<div class="flex flex-wrap gap-1.5">
-						{#each STATUS_CHOICES as s (s)}
-							<button
-								type="button"
-								onclick={() => (editStatus = s)}
-								class="min-h-9 rounded-full border px-3 text-xs font-medium transition-colors {editStatus ===
-								s
-									? `border-transparent ${STATUS_COLORS[s] ?? 'bg-foreground text-background'}`
-									: 'bg-background hover:bg-muted'}"
-							>
-								{s}
-							</button>
-						{/each}
-					</div>
-				</div>
-			</div>
-			<Sheet.Footer class="flex flex-row justify-end gap-2 px-4 pb-2 pt-0">
-				<Button variant="outline" size="sm" class="min-h-10" onclick={closeEdit}>Cancel</Button>
-				<Button size="sm" class="min-h-10" onclick={saveEdit}>Save</Button>
-			</Sheet.Footer>
-		</Sheet.Content>
-	</Sheet.Root>
+		entry={editingEntry
+			? {
+					unitName: editingEntry.unitName,
+					division: editingEntry.division,
+					assignment: editingEntry.assignment ?? '',
+					status: editingEntry.status
+				}
+			: null}
+		boxChoices={boardColumnChoices}
+		statusChoices={[...STATUS_CHOICES]}
+		statusColors={STATUS_COLORS}
+		onClose={closeEdit}
+		onSave={saveBoardEntry}
+		onRemove={removeBoardEntry}
+	/>
+
+	<BoardColumnEditSheet
+		bind:open={columnSheetOpen}
+		column={editingColumn}
+		onClose={closeColumnEdit}
+		onSave={saveBoardColumn}
+		onClear={clearBoardColumn}
+	/>
 
 	<!-- End session confirmation sheet -->
 	<Sheet.Root bind:open={endSheetOpen}>
